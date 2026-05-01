@@ -57,7 +57,7 @@ int BlockChain::getNumOfBlocks(void) {
 // checks whether data fits with the right hash -> add block
 int BlockChain::addBlock(int index, string prevHash, string hash, string nonce, vector<string> &merkle) {
     string header = to_string(index) + prevHash + getMerkleRoot(merkle) + nonce;
-    if ( (!sha256(header).compare(hash)) && (hash.substr(0,2) == "00" ) && (index == blockchain.size())) {
+    if ( (!sha256(header).compare(hash)) && (hash.substr(0,6) == "000000" ) && (index == blockchain.size())) {
         printf("Block hashes match --- Adding Block %s \n",hash.c_str());
         this->blockchain.push_back(std::make_unique<Block>(index,prevHash,hash,nonce,merkle));
         return 1;
