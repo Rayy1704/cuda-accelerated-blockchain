@@ -14,8 +14,9 @@ LDFLAGS = -lssl -lcrypto -lboost_system -lcudart
 SRCS_CPP = main.cpp
 SRCS_CU  = gpu_mining.cu
 SHA_CU   = sha256_gpu.cu
-OBJS     = main.o gpu_mining.o sha256_gpu.o
-HDRS     = gpu_mining.h sha256_gpu.h
+MERKLE_CU = gpu_merkle.cu
+OBJS     = main.o gpu_mining.o sha256_gpu.o gpu_merkle.o
+HDRS     = gpu_mining.h sha256_gpu.h cuda_error_check.h gpu_merkle.h
 
 .PHONY: all clean
 
@@ -37,6 +38,8 @@ gpu_mining.o: $(SRCS_CU) $(HDRS)
 sha256_gpu.o: $(SHA_CU) sha256_gpu.h
 	$(NVCC) $(NVCCFLAGS) -c $(SHA_CU) -o sha256_gpu.o
 
+gpu_merkle.o: $(MERKLE_CU) $(HDRS)
+	$(NVCC) $(NVCCFLAGS) -c $(MERKLE_CU) -o gpu_merkle.o
 clean:
 	@rm -f *.o $(TARGET)
 	@echo "All object files and the main executable have been removed."

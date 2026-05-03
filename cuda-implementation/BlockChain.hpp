@@ -11,6 +11,7 @@
 #include "gpu_mining.h"
 #include "common.hpp"
 #include "Block.hpp"
+#include "gpu_merkle.h"
 
 #include "json.hh"
 using json = nlohmann::json;
@@ -35,7 +36,8 @@ BlockChain::BlockChain(int genesis ){
     if (genesis == 0) {
         vector<string> v;
         v.push_back("Genesis Block!");
-        string header = to_string(0) + string("00000000000000") + getMerkleRoot(v);
+        string merkleRoot = getMerkleRootGPU(v);
+        string header = to_string(0) + string("00000000000000") + merkleRoot;
         auto hash_nonce_pair = findHashGPU(const_cast<char*>(header.c_str()));
     
         this -> blockchain.push_back(std::make_unique<Block>(0,string("00000000000000"),hash_nonce_pair.first,hash_nonce_pair.second,v));
@@ -59,7 +61,7 @@ int BlockChain::getNumOfBlocks(void) {
 
 // checks whether data fits with the right hash -> add block
 int BlockChain::addBlock(int index, string prevHash, string hash, string nonce, vector<string> &merkle) {
-    string header = to_string(index) + prevHash + getMerkleRoot(merkle) + nonce;
+    string header = to_string(index) + prevHash + getMerkleRootGPU(merkle) + nonce;
     if ( (!sha256(header).compare(hash)) && (hash.substr(0,6) == "000000" ) && (index == blockchain.size())) {
         printf("Block hashes match --- Adding Block %s \n",hash.c_str());
         this->blockchain.push_back(std::make_unique<Block>(index,prevHash,hash,nonce,merkle));

@@ -20,10 +20,16 @@ void print_hex(const char *label, const uint8_t *v, size_t len) {
 }
 
 string getMerkleRoot(const vector<string> &merkle) {
-    printf("\nFinding Merkle Root.... \n");
-    if (merkle.empty())
+    clock_t start = clock();
+    if (merkle.empty()){
+        clock_t end = clock();
+        double elapsedSeconds = static_cast<double>(end - start) / CLOCKS_PER_SEC;
+        std::cout << "GPU Merkle tree calculation time: " << elapsedSeconds << " s" << endl;
         return "";
-    else if (merkle.size() == 1){
+    }else if (merkle.size() == 1){
+        clock_t end = clock();
+        double elapsedSeconds = static_cast<double>(end - start) / CLOCKS_PER_SEC;
+        std::cout << "GPU Merkle tree calculation time: " << elapsedSeconds << " s" << endl;
         return sha256(merkle[0]);
     }
 
@@ -44,6 +50,9 @@ string getMerkleRoot(const vector<string> &merkle) {
         }
         new_merkle = result;
     }
+        clock_t end = clock();
+        double elapsedSeconds = static_cast<double>(end - start) / CLOCKS_PER_SEC;
+        cout << "GPU Merkle tree calculation time: " << elapsedSeconds << " s" << endl;
     return new_merkle[0];
 
 }
