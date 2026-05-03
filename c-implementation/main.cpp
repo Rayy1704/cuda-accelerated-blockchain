@@ -149,7 +149,7 @@ int main() {
     //COMMAND LINE INTERFACE
 
     // loop for 20 inputs - can change
-    for ( int i = 0; i < 20; i++ ) {
+    for ( int i = 0; i < 100000; i++ ) {
         vector<string> v;
         int temp;
         // ask for what to do
@@ -172,7 +172,9 @@ int main() {
             scanf("%200s",tmp);
             string str = tmp;
             printf("Entered '%s' into block\n",str.c_str());
-            v.push_back(str);
+            for(int i=0;i<4000;i++){
+                v.push_back(str);
+            }
 
             int in;
             printf("Press any number to add block to blockchain: ");

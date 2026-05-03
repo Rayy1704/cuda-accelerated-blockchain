@@ -40,6 +40,7 @@ BlockChain::BlockChain(int genesis ){
         string header = to_string(0) + string("00000000000000") + merkleRoot;
         auto hash_nonce_pair = findHashGPU(const_cast<char*>(header.c_str()));
     
+        printf("\nInitializing Block: %d ---- Hash: %s \n", 0, hash_nonce_pair.first.c_str());
         this -> blockchain.push_back(std::make_unique<Block>(0,string("00000000000000"),hash_nonce_pair.first,hash_nonce_pair.second,v));
         printf("Created blockchain!\n");
     }
@@ -63,6 +64,7 @@ int BlockChain::getNumOfBlocks(void) {
 int BlockChain::addBlock(int index, string prevHash, string hash, string nonce, vector<string> &merkle) {
     string header = to_string(index) + prevHash + getMerkleRootGPU(merkle) + nonce;
     if ( (!sha256(header).compare(hash)) && (hash.substr(0,6) == "000000" ) && (index == blockchain.size())) {
+        printf("\nInitializing Block: %d ---- Hash: %s \n", index, hash.c_str());
         printf("Block hashes match --- Adding Block %s \n",hash.c_str());
         this->blockchain.push_back(std::make_unique<Block>(index,prevHash,hash,nonce,merkle));
         return 1;

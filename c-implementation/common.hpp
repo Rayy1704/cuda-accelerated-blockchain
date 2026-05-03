@@ -8,6 +8,7 @@
 #include <memory>
 #include <stdexcept>
 #include <ctime>
+#include <iomanip>
 
 void print_hex(const char *label, const uint8_t *v, size_t len) {
     size_t i;
@@ -20,16 +21,17 @@ void print_hex(const char *label, const uint8_t *v, size_t len) {
 }
 
 string getMerkleRoot(const vector<string> &merkle) {
+    printf("DEBUG: merkle.size() = %zu\n", merkle.size());
     clock_t start = clock();
     if (merkle.empty()){
         clock_t end = clock();
         double elapsedSeconds = static_cast<double>(end - start) / CLOCKS_PER_SEC;
-        std::cout << "GPU Merkle tree calculation time: " << elapsedSeconds << " s" << endl;
+        std::cout << fixed << setprecision(5) << "CPU Merkle tree calculation time size was 0: " << elapsedSeconds << " s" << endl;
         return "";
     }else if (merkle.size() == 1){
         clock_t end = clock();
         double elapsedSeconds = static_cast<double>(end - start) / CLOCKS_PER_SEC;
-        std::cout << "GPU Merkle tree calculation time: " << elapsedSeconds << " s" << endl;
+        std::cout << fixed << setprecision(5) << "CPU Merkle tree calculation time size was 1: " << elapsedSeconds << " s" << endl;
         return sha256(merkle[0]);
     }
 
@@ -45,14 +47,13 @@ string getMerkleRoot(const vector<string> &merkle) {
             string var1 = sha256(new_merkle[i]);
             string var2 = sha256(new_merkle[i+1]);
             string hash = sha256(var1+var2);
-            // printf("---hash(hash(%s), hash(%s)) => %s\n",new_merkle[0].c_str(),new_merkle[1].c_str(),hash.c_str());
             result.push_back(hash);
         }
         new_merkle = result;
     }
         clock_t end = clock();
         double elapsedSeconds = static_cast<double>(end - start) / CLOCKS_PER_SEC;
-        cout << "GPU Merkle tree calculation time: " << elapsedSeconds << " s" << endl;
+        cout << fixed << setprecision(5) << "CPU Merkle tree calculation time: size was " << new_merkle.size() << ": " << elapsedSeconds << " s" << endl;
     return new_merkle[0];
 
 }

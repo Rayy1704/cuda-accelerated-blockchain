@@ -4,3 +4,4 @@ main
 *.o
 .DS_Store
 **/.DS_Store
+auto_mine.sh

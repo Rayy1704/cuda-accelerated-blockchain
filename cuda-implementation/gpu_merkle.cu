@@ -1,6 +1,7 @@
 #include "gpu_merkle.h"
 #include "cuda_error_check.h"
 #include "sha256_gpu.h"
+#include "hash.hpp"
 __global__ 
 void merkelKernel(unsigned char *header, int headerLen){
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -10,7 +11,7 @@ void merkelKernel(unsigned char *header, int headerLen){
 
     unsigned char* left = (unsigned char*) (header + (i * 2)*32);// left hash
     unsigned char* right = (unsigned char*) (header + (i * 2+1)*32); // right hash
-    unsigned char * out = (unsigned char * )(header+i);// output slot (thread itself)
+    unsigned char * out = (unsigned char * )(header+i*32);// output slot (thread itself)
     //for calculating
     unsigned char combined_hashes[64];
     memcpy(combined_hashes, left, 32);
@@ -29,11 +30,16 @@ std :: string getMerkleRootGPU(std::vector <std::string>& merkle){ // function d
     }
     int numHashes=hashes.size();
     unsigned char* h_hashes = new unsigned char [numHashes*32];
-    for (int i=0;i<numHashes;i++){
-        memcpy(h_hashes+i*32, hashes[i].c_str(), 32); // copy the hashes into a continous memory
+    for (int i = 0; i < numHashes; i++) {
+    std::string hashed = sha256(hashes[i]);  // hash the raw data first
+    for (int j = 0; j < 32; j++) {
+        h_hashes[i * 32 + j] = (unsigned char)strtol(
+            hashed.substr(j * 2, 2).c_str(), nullptr, 16
+        );
     }
+}
     unsigned char *d_hashes;
-    CUDA_CHECK_STR(cudaMalloc(&d_hashes, numHashes*32)); // allocate memory on the GPU
+    CUDA_CHECK_STR(cudaMalloc(&d_hashes, (numHashes + 1) * 32)); // allocate memory on the GPU
     CUDA_CHECK_STR(cudaMemcpy(d_hashes, h_hashes, numHashes*32, cudaMemcpyHostToDevice)); // copy the hashes to the GPU
     
     // Create CUDA events for timing
@@ -56,7 +62,7 @@ std :: string getMerkleRootGPU(std::vector <std::string>& merkle){ // function d
         merkelKernel<<<blocks_dim, threads_dim>>>(d_hashes, count); // launch the kernel to compute the next level of hashes
         CUDA_CHECK_KERNEL_STR();
         CUDA_CHECK_STR(cudaDeviceSynchronize()); // wait for the kernel to finish
-        count = (count+1)/2; // update the count for the next level
+        count = (count)/2; // update the count for the next level
     }
 
     cudaEventRecord(stop);
