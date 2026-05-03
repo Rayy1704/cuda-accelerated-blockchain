@@ -7,6 +7,7 @@
 #include <vector>
 #include <memory>
 #include <stdexcept>
+#include <ctime>
 
 void print_hex(const char *label, const uint8_t *v, size_t len) {
     size_t i;
@@ -48,17 +49,25 @@ string getMerkleRoot(const vector<string> &merkle) {
 }
 pair<string,string> findHash(int index, string prevHash, vector<string> &merkle) {
     string header = to_string(index) + prevHash + getMerkleRoot(merkle);
-    unsigned int nonce;
+    unsigned int nonce = 0;
+    string minedHash;
+    clock_t start = clock();
+    
     for (nonce = 0; nonce < 100000000000; nonce++ ) {
         string blockHash = sha256(header + to_string(nonce));
         if (blockHash.substr(0,6) == "000000"){
-            // cout << "nonce: " << nonce;
-            // cout << "header: " << header;
-            return make_pair(blockHash,to_string(nonce));
+            minedHash = blockHash;
             break;
         }
     }
-    return make_pair("fail","fail");
+    clock_t end = clock();
+    double elapsedSeconds = static_cast<double>(end - start) / CLOCKS_PER_SEC;
+    cout << "CPU mining time: " << elapsedSeconds << " s" << endl;
+
+    if (!minedHash.empty()) {
+        return make_pair(minedHash, to_string(nonce));
+    }
+    return make_pair("fail", "fail");
 }
 // int addBlock(int index, string prevHash, vector<string> &merkle, vector<unique_ptr<Block> > &blockchain) {
 //     string header = to_string(index) + prevHash + getMerkleRoot(merkle);

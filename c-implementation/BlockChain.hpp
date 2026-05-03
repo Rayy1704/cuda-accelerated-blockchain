@@ -47,7 +47,7 @@ Block BlockChain::getBlock(int index) {
         }
     }
     throw invalid_argument("Index does not exist.");
-}
+}   
 
 // returns number of blocks
 int BlockChain::getNumOfBlocks(void) {

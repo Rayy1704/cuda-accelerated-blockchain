@@ -184,7 +184,8 @@ int main() {
                     continue;
                 }
                 // mine for the has
-                auto pair = findHash(bc.getNumOfBlocks(),bc.getLatestBlockHash(),v);
+                string header= to_string(bc.getNumOfBlocks()) + bc.getLatestBlockHash() + getMerkleRoot(v);
+                auto pair = findHashGPU(const_cast<char*>(header.c_str()));
                 // add the block to the blockchain
                 bc.addBlock(bc.getNumOfBlocks(),bc.getLatestBlockHash(),pair.first,pair.second,v );
                 // send the blockchain to the network

@@ -13,8 +13,9 @@ LDFLAGS = -lssl -lcrypto -lboost_system -lcudart
 # Files
 SRCS_CPP = main.cpp
 SRCS_CU  = gpu_mining.cu
-OBJS     = main.o gpu_mining.o
-HDRS     = gpu_mining.h
+SHA_CU   = sha256_gpu.cu
+OBJS     = main.o gpu_mining.o sha256_gpu.o
+HDRS     = gpu_mining.h sha256_gpu.h
 
 .PHONY: all clean
 
@@ -31,6 +32,10 @@ main.o: $(SRCS_CPP) $(HDRS)
 # Rule for gpu_mining.o
 gpu_mining.o: $(SRCS_CU) $(HDRS)
 	$(NVCC) $(NVCCFLAGS) -c $(SRCS_CU) -o gpu_mining.o
+
+# Rule for sha256_gpu.o
+sha256_gpu.o: $(SHA_CU) sha256_gpu.h
+	$(NVCC) $(NVCCFLAGS) -c $(SHA_CU) -o sha256_gpu.o
 
 clean:
 	@rm -f *.o $(TARGET)
