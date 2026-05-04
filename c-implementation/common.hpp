@@ -21,7 +21,6 @@ void print_hex(const char *label, const uint8_t *v, size_t len) {
 }
 
 string getMerkleRoot(const vector<string> &merkle) {
-    printf("DEBUG: merkle.size() = %zu\n", merkle.size());
     clock_t start = clock();
     if (merkle.empty()){
         clock_t end = clock();
