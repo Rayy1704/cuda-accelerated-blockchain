@@ -96,7 +96,12 @@ int BlockChain::replaceChain(json chain) {
     return 1;
 }
 bool BlockChain::isChainValid() {
-    
+    for (int i = 1; i < blockchain.size(); i++) {
+        Block* b = blockchain[i].get();
+        vector<string> data = b->getData();
+        string header = to_string(b->getIndex()) + b->getPreviousHash() + getMerkleRoot(data) + b->getNonce();
+    }
+    return true;
 }
 
 #endif
