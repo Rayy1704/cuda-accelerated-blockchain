@@ -23,6 +23,7 @@ public:
     // void toString(void);
     string toJSON(void);
     int replaceChain(json chain);
+    bool isChainValid();
 private:
     vector<unique_ptr<Block> > blockchain; //vector that is the blockchain
 };
@@ -93,6 +94,9 @@ int BlockChain::replaceChain(json chain) {
         this->addBlock(block["index"],block["previousHash"],block["hash"],block["nonce"],data);
     } 
     return 1;
+}
+bool BlockChain::isChainValid() {
+    
 }
 
 #endif
