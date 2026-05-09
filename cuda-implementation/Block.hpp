@@ -16,6 +16,7 @@ class Block {
         Block(int index, string prevHas, string hash, string nonce, vector<string> data);
         string getPreviousHash(void);
         string getHash(void);
+        string getNonce(void);
         int getIndex(void);
         vector<string> getData(void);
 
@@ -42,6 +43,10 @@ Block::Block(int index, string prevHash, string hash, string nonce, vector<strin
 
 int Block::getIndex(void) {
     return this -> index;
+}
+
+string Block::getNonce(void) {
+    return this -> nonce;
 }
 
 string Block::getPreviousHash(void) {
