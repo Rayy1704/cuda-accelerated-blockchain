@@ -53,6 +53,12 @@ int main() {
     if (ch == 'y'){
         // Initial Node: setup Blockchain with genesis block
         bc = BlockChain(0);
+        if(bc.isChainValid()){
+            printf("=> Valid Blockchain\n");
+        }
+        else {
+            printf("=> InValid Blockchain\n");
+        }
     }
     else if(ch =='n'){
         // New Node - need to add self to network by providing ports 
@@ -189,8 +195,15 @@ int main() {
                 auto pair = findHash(bc.getNumOfBlocks(),bc.getLatestBlockHash(),v);
                 // add the block to the blockchain
                 bc.addBlock(bc.getNumOfBlocks(),bc.getLatestBlockHash(),pair.first,pair.second,v );
-                // send the blockchain to the network
-                sendNewChain(&listOfNodes,bc.toJSON());
+                if(bc.isChainValid()){
+                    printf("=>Valid Blockchain Sent");
+                    // send the blockchain to the network
+                    sendNewChain(&listOfNodes,bc.toJSON());
+                }else {
+                    printf("Blockchain Invalid and not Sent");
+                }
+                
+                
             }
             catch (const exception& e) {
                 cout << e.what() << "\n" << endl;
