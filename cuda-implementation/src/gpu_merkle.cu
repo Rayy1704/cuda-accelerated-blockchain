@@ -1,6 +1,6 @@
 #include "gpu_merkle.h"
 #include "cuda_error_check.h"
-#include "sha256_gpu.h"
+#include "gpu_sha256.h"
 #include "hash.hpp"
 __global__ 
 void merkelKernel(unsigned char *header, int headerLen){

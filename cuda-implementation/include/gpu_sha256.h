@@ -1,5 +1,5 @@
-#ifndef SHA256_GPU_H
-#define SHA256_GPU_H
+#ifndef GPU_SHA256_H
+#define GPU_SHA256_H
 
 #include <stdint.h>
 #include <cstring>
@@ -17,4 +17,4 @@ extern __constant__ uint32_t K[64];
 
 __device__ void sha256_device(const unsigned char* input, int len, unsigned char* output);
 
-#endif // SHA256_GPU_H
+#endif // GPU_SHA256_H
