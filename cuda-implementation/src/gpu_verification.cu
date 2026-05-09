@@ -12,8 +12,6 @@
 #include "Block.hpp"
 #include "hash.hpp"
 
-namespace {
-
 struct VerificationRecord {
     int index;
     char previousHash[65];
@@ -27,9 +25,6 @@ __device__ bool stringsEqual(const char* lhs, const char* rhs) {
         if (lhs[i] != rhs[i]) {
             return false;
         }
-        if (lhs[i] == '\0') {
-            return true;
-        }
     }
     return true;
 }
@@ -38,6 +33,24 @@ void copyString(char* destination, const std::string& source) {
     std::strncpy(destination, source.c_str(), 64);
     destination[64] = '\0';
 }
+__global__ void verifyChainKernel(const VerificationRecord* records, int size, int* result) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= size - 1 || *result == 0) {
+        return;
+    }
+
+    const VerificationRecord& previous = records[idx];
+    const VerificationRecord& current = records[idx + 1];
+
+    bool valid = (current.index == previous.index + 1) &&stringsEqual(current.previousHash, previous.hash) &&stringsEqual(current.hash, current.expectedHash);
+
+    if (!valid) {
+        atomicExch(result, 0);
+    }
+}
+
+
+
 
 
 
