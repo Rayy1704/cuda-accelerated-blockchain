@@ -43,4 +43,23 @@
         } \
     }
 
+// CUDA_CHECK_BOOL for functions returning bool
+#define CUDA_CHECK_BOOL(call) \
+    { \
+        cudaError_t err = call; \
+        if (err != cudaSuccess) { \
+            fprintf(stderr, "CUDA Error at %s:%d - %s\n", __FILE__, __LINE__, cudaGetErrorString(err)); \
+            return false; \
+        } \
+    }
+
+#define CUDA_CHECK_KERNEL_BOOL() \
+    { \
+        cudaError_t err = cudaGetLastError(); \
+        if (err != cudaSuccess) { \
+            fprintf(stderr, "CUDA Kernel Launch Error at %s:%d - %s\n", __FILE__, __LINE__, cudaGetErrorString(err)); \
+            return false; \
+        } \
+    }
+
 #endif // CUDA_ERROR_CHECK_H
