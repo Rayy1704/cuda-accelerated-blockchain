@@ -1,11 +1,14 @@
-#ifndef GPU_VERIFICATION_H
-#define GPU_VERIFICATION_H
-
-#include <memory>
+#pragma once
+#include <string>
 #include <vector>
 
-class Block;
+struct VerificationRecord {
+    int  index;
+    char previousHash[65];
+    char hash[65];
+    char header[256];
+    int  headerLen;
+};
 
-bool verifyChainGPU(std::vector<std::unique_ptr<Block>>& blockchain);
+bool verifyChainGPU(class BlockChain& blockchain);
 
-#endif // GPU_VERIFICATION_H
