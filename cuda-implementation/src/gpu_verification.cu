@@ -11,7 +11,7 @@
 #include "gpu_merkle.h"
 #include "Block.hpp"
 #include "hash.hpp"
-
+#include "cuda_error_checking.h"
 struct VerificationRecord {
     int index;
     char previousHash[65];
