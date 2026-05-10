@@ -12,6 +12,7 @@
 #include "BlockChain.hpp"
 #include "requests.hpp"
 #include "gpu_merkle.h"
+#include "gpu_verification.h"
 
 #include "json.hh"
 using json = nlohmann::json;
@@ -54,6 +55,12 @@ int main() {
     if (ch == 'y'){
         // Initial Node: setup Blockchain with genesis block
         bc = BlockChain(0);
+        if(verifyChainGPU(bc)){
+            printf("=> Valid Blockchain\n");
+        }
+        else {
+            printf("=> InValid Blockchain\n");
+        }
     }
     else if(ch =='n'){
         // New Node - need to add self to network by providing ports 
@@ -192,8 +199,15 @@ int main() {
                 auto pair = findHashGPU(const_cast<char*>(header.c_str()));
                 // add the block to the blockchain
                 bc.addBlock(bc.getNumOfBlocks(),bc.getLatestBlockHash(),pair.first,pair.second,v );
+                if(verifyChainGPU(bc)){
+                    printf("=> Valid Blockchain\n");
+                    sendNewChain(&listOfNodes,bc.toJSON());
+                }
+                else {
+                printf("=> InValid Blockchain Not Sent\n");
+                }
                 // send the blockchain to the network
-                sendNewChain(&listOfNodes,bc.toJSON());
+                
             }
             catch (const exception& e) {
                 cout << e.what() << "\n" << endl;
