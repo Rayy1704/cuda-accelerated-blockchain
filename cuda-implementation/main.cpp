@@ -33,6 +33,7 @@ Hash header: index + prevHash + merkleRoot(data) + nonce
 /*
  * Main function - sets up server, command line interface
  */
+
 int main() {
     printf("Welcome! To quit-> Control c \n");
     HttpServer server;
@@ -195,7 +196,7 @@ int main() {
                     continue;
                 }
                 // mine for the has
-                string header= to_string(bc.getNumOfBlocks()) + bc.getLatestBlockHash() + getMerkleRootGPU(v);
+                string header= to_string(bc.getNumOfBlocks()) + bc.getLatestBlockHash() + getMerkleRootGPU(v,'v');
                 auto pair = findHashGPU(const_cast<char*>(header.c_str()));
                 // add the block to the blockchain
                 bc.addBlock(bc.getNumOfBlocks(),bc.getLatestBlockHash(),pair.first,pair.second,v );

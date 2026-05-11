@@ -6,8 +6,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include "BlockChain.hpp"
-#include "Block.hpp"
 #include "gpu_sha256.h"
 #include "gpu_merkle.h"
 #include "cuda_error_check.h"
@@ -21,10 +19,8 @@ __device__ void bytesToHex(unsigned char* bytes, char* hex) {
     hex[64] = '\0';
 }
 
-__device__ bool stringsEqual(const char* lhs, const char* rhs) {
-    const uint32_t* a = (const uint32_t*)lhs;
-    const uint32_t* b = (const uint32_t*)rhs;
-    for (int i = 0; i < 16; i++) {  // 64 bytes / 4 = 16 uint32s
+__device__ bool stringsEqual(const char* a, const char* b) {
+    for (int i = 0; i < 64; i++) {
         if (a[i] != b[i]) return false;
     }
     return true;
@@ -59,40 +55,25 @@ __global__ void verifyChainKernel(const VerificationRecord* records, int size, i
     }
 }
 
-bool verifyChainGPU(BlockChain& blockchain) {
-    if (blockchain.getNumOfBlocks() < 2) {
+bool runVerifyKernel(VerificationRecord* h_blockChain, int size) {
+    if (size < 2) {
         return true;
     }
-    std::vector<VerificationRecord> h_blockChain;
-    Block temp = blockchain.getBlock(0);
-    for (int i = 0; i < blockchain.getNumOfBlocks(); ++i) { //avoidable loop but not related to GPU
-        temp = blockchain.getBlock(i);
-        std::vector<std::string> data = temp.getData();
-        std::string merkleRoot = getMerkleRootGPU(data);
-        std::string header = std::to_string(temp.getIndex()) + temp.getPreviousHash() + merkleRoot + temp.getNonce();
-        VerificationRecord record;
-        record.index = temp.getIndex();
-        record.headerLen = (int)header.size();
-        copyString(record.previousHash, temp.getPreviousHash());
-        copyString(record.hash, temp.getHash());
-        std::memset(record.header, 0, 256);
-        std::memcpy(record.header, header.c_str(), header.size());
-        h_blockChain.push_back(record);
-    }
+
 
     VerificationRecord* d_blockChain = nullptr;
-    CUDA_CHECK_BOOL(cudaMalloc(&d_blockChain, h_blockChain.size() * sizeof(VerificationRecord)));
+    CUDA_CHECK_BOOL(cudaMalloc(&d_blockChain, size * sizeof(VerificationRecord)));
 
     int* d_result = nullptr;
     int h_result = 1;
     CUDA_CHECK_BOOL(cudaMalloc(&d_result, sizeof(int)));
 
-    CUDA_CHECK_BOOL(cudaMemcpy(d_blockChain, h_blockChain.data(), h_blockChain.size() * sizeof(VerificationRecord), cudaMemcpyHostToDevice));
+    CUDA_CHECK_BOOL(cudaMemcpy(d_blockChain, h_blockChain, size * sizeof(VerificationRecord), cudaMemcpyHostToDevice));
 
     CUDA_CHECK_BOOL(cudaMemcpy(d_result, &h_result, sizeof(int), cudaMemcpyHostToDevice));
 
     const int threadsPerBlock = 256;
-    const int blocks = static_cast<int>((blockchain.getNumOfBlocks() + threadsPerBlock - 1) / threadsPerBlock);
+    const int blocks = static_cast<int>((size + threadsPerBlock - 1) / threadsPerBlock);
     dim3 grid(blocks);
     dim3 block(threadsPerBlock);
 
@@ -101,7 +82,7 @@ bool verifyChainGPU(BlockChain& blockchain) {
     cudaEventCreate(&stop);
     cudaEventRecord(start);
 
-    verifyChainKernel<<<grid, block>>>(d_blockChain, static_cast<int>(blockchain.getNumOfBlocks()), d_result);
+    verifyChainKernel<<<grid, block>>>(d_blockChain, size, d_result);
 
     CUDA_CHECK_KERNEL_BOOL();
 
