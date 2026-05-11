@@ -8,7 +8,7 @@
 #include "gpu_sha256.h"
 #include "hash.hpp"
 
-
+__constant__ unsigned char d_header[256];
 
 __device__ bool hasLeadingZeros(unsigned char* hash) {
     int fullBytes = 3; //for first 6 characters
@@ -18,11 +18,13 @@ __device__ bool hasLeadingZeros(unsigned char* hash) {
     return true;
 }
 __global__ __launch_bounds__(256)
-void mineKernel(const unsigned char* header,int headerLen,unsigned int batchStart,unsigned int* resultNonce,int* found){
+void mineKernel(int headerLen,unsigned int batchStart,unsigned int* resultNonce,int* found){
     if (__builtin_expect(*found, 0)) return; // already found hash, skip work
     unsigned int og_nonce = batchStart + blockIdx.x * blockDim.x + threadIdx.x; // calculate nonce
     unsigned char input[256]; // buffer for header + nonce and padding
-    memcpy(input, header, headerLen); // copy header into buffer]
+    for (int i = 0; i < headerLen; i++) {
+        input[i] = d_header[i];
+    }
     int totalLen;
     unsigned int nonce= og_nonce;
     unsigned int n = nonce;
@@ -60,18 +62,15 @@ void mineKernel(const unsigned char* header,int headerLen,unsigned int batchStar
 // wrapper function to launch kernel (same format as defined by tko22 in simple blockchain)
 std::pair <std::string,std::string> findHashGPU(char * header){
     int headerLen= strlen(header);
-    unsigned char *d_header; // creating device pointers for global memory in device
+   // creating device pointers for global memory in device
     unsigned int *d_resultNonce;
     int *d_found;
     
     // Allocate device memory with error checking
-    CUDA_CHECK(cudaMalloc(&d_header, headerLen+1)); // +1 for null terminator
+    CUDA_CHECK(cudaMemcpyToSymbol(d_header, header, headerLen));
     CUDA_CHECK(cudaMalloc(&d_resultNonce, sizeof(unsigned int)));
     CUDA_CHECK(cudaMalloc(&d_found, sizeof(int)));
-    
-    // Copy header to device with error checking
-    CUDA_CHECK(cudaMemcpy(d_header, header, headerLen, cudaMemcpyHostToDevice));
-    
+        
     // Initialize device memory with error checking
     CUDA_CHECK(cudaMemset(d_resultNonce, 0, sizeof(unsigned int)));
     CUDA_CHECK(cudaMemset(d_found, 0, sizeof(int)));
@@ -87,7 +86,7 @@ std::pair <std::string,std::string> findHashGPU(char * header){
     cudaEventCreate(&stop);
     cudaEventRecord(start);
     while(!h_found){
-            mineKernel<<<grid, block>>>(d_header, headerLen, batchStart, d_resultNonce, d_found);
+            mineKernel<<<grid, block>>>(headerLen, batchStart, d_resultNonce, d_found);
         
         // Check for kernel launch errors
         CUDA_CHECK_KERNEL();
@@ -113,7 +112,6 @@ std::pair <std::string,std::string> findHashGPU(char * header){
     std::string safeHash = sha256(finalInputStr);  
     std::string safeNonce = std::to_string(h_nonce);
     // Free device memory with error checking
-    CUDA_CHECK(cudaFree(d_header));
     CUDA_CHECK(cudaFree(d_resultNonce));
     CUDA_CHECK(cudaFree(d_found));
     
