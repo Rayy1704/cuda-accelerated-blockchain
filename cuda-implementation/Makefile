@@ -36,7 +36,7 @@ all: $(TARGET)
 
 # 3. Link everything together using nvcc
 $(TARGET): $(CU_OBJS) $(CPP_OBJS)
-	$(NVCC) $(NVCCFLAGS) -o $@ $^ -lssl -lcrypto -lboost_system
+	$(NVCC) $(NVCCFLAGS) -o $@ $^ -lssl -lcrypto -lboost_system -lcudadevrt      
 
 clean:
 	@echo "Cleaning build artifacts..."
