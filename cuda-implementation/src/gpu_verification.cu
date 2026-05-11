@@ -30,7 +30,7 @@ void copyString(char* destination, const std::string& source) {
     std::strncpy(destination, source.c_str(), 64);
     destination[64] = '\0';
 }
-__global__ void verifyChainKernel(const VerificationRecord* records, int size, int* result) {
+__global__ void verifyChainKernel(const VerificationRecord* __restrict__ records, int size, int* result) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= size - 1 || atomicAdd(result, 0) == 0) { //experiemtn with atomic add
         return;
