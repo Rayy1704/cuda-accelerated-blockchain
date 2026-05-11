@@ -10,7 +10,7 @@
 #include <ctime>
 using namespace std;
 
-void print_hex(const char *label, const uint8_t *v, size_t len) {
+inline void print_hex(const char *label, const uint8_t *v, size_t len) {
     size_t i;
 
     printf("%s: ", label);

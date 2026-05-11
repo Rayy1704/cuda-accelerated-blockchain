@@ -1,4 +1,3 @@
-//author: tko
 #ifndef BLOCK_H
 #define BLOCK_H
 
@@ -9,6 +8,8 @@
 #include <stdexcept>
 
 #include "json.hh"
+using namespace std;
+
 using json = nlohmann::json;
 
 class Block {
@@ -28,41 +29,38 @@ class Block {
         string blockHash;
         string nonce;
         vector<string> data;
-        // string getMerkleRoot(const vector<string> &merkle);
 };
-// Constructor 
-Block::Block(int index, string prevHash, string hash, string nonce, vector<string> data ) {
+
+inline Block::Block(int index, string prevHash, string hash, string nonce, vector<string> data ) {
     printf("\nInitializing Block: %d ---- Hash: %s \n", index,hash.c_str());
     this -> previousHash = prevHash;
     this -> data = data;
     this -> index = index;
     this -> nonce = nonce;
     this -> blockHash = hash;
-    
 }
 
-int Block::getIndex(void) {
+inline int Block::getIndex(void) {
     return this -> index;
 }
 
-string Block::getNonce(void) {
+inline string Block::getNonce(void) {
     return this -> nonce;
 }
 
-string Block::getPreviousHash(void) {
+inline string Block::getPreviousHash(void) {
     return this -> previousHash;
 }
 
-string Block::getHash(void) {
+inline string Block::getHash(void) {
     return this -> blockHash;
 }
 
-vector<string> Block::getData(void){
+inline vector<string> Block::getData(void){
     return this -> data;
 }
 
-// Prints Block data 
-void Block::toString(void) {
+inline void Block::toString(void) {
     string dataString;
     for (int i=0; i < data.size(); i++)
         dataString += data[i] + ", ";
@@ -72,7 +70,7 @@ void Block::toString(void) {
     printf("\n-------------------------------\n");
 }
 
-json Block::toJSON(void) {
+inline json Block::toJSON(void) {
     json j;
     j["index"] = this->index;
     j["hash"] = this->blockHash;
