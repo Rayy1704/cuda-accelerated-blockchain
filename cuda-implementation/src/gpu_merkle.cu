@@ -23,7 +23,7 @@ void merkelKernel(unsigned char *header, int headerLen){
     memcpy(out, hash_output, 32); // store resultant hash into thread id place
 }
 
-std :: string getMerkleRootGPU(std::vector <std::string>& merkle){ // function definition as per tko 22 standards
+std :: string getMerkleRootGPU(std::vector <std::string>& merkle,char verbose){ // function definition as per tko 22 standards
     std :: vector<std :: string> hashes = merkle; // start with the initial level of hashes
     if(hashes.size()%2!=0){ // incase of odd number of hashes
         hashes.push_back(hashes.back()); // duplicate the last hash
@@ -69,7 +69,10 @@ std :: string getMerkleRootGPU(std::vector <std::string>& merkle){ // function d
     cudaEventSynchronize(stop);
     float ms;
     cudaEventElapsedTime(&ms, start, stop);
-    printf("\nGPU Merkle tree calculation time: %.5f s\n", ms / 1000.0f);
+    if(verbose =='v'){
+            printf("\nGPU Merkle tree calculation time: %.5f s\n", ms / 1000.0f);
+
+    }
 
     unsigned char h_merkle_root[32];
     CUDA_CHECK_STR(cudaMemcpy(h_merkle_root, d_hashes, 32, cudaMemcpyDeviceToHost)); // copy the final merkle root back to the host

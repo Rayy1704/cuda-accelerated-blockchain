@@ -4,6 +4,6 @@
 #include <string>
 #include <vector>
 
-std::string getMerkleRootGPU(std::vector<std::string>& merkle);
+std::string getMerkleRootGPU(std::vector<std::string>& merkle,char verbose);
 
 #endif // GPU_MERKLE_H
