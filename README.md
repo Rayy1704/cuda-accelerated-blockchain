@@ -6,7 +6,7 @@
 
 ---
 
-## 🛠 Tech Stack & Environment
+## Tech Stack & Environment
 
 | Category | Technologies |
 | :--- | :--- |
@@ -15,7 +15,7 @@
 | **Environment** | ![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black) ![Git](https://img.shields.io/badge/Git-F05032?style=for-the-badge&logo=git&logoColor=white) |
 | **Editors** | ![Neovim](https://img.shields.io/badge/Neovim-57A143?style=for-the-badge&logo=neovim&logoColor=white) ![Vim](https://img.shields.io/badge/Vim-199147?style=for-the-badge&logo=vim&logoColor=white) |
 
-### 💻 Hardware Configuration
+### Hardware Configuration
 All benchmarks and validations for this project were conducted on a high-performance workstation to ensure consistent data and maximize GPU utilization:
 * **CPU**: Intel(R) Xeon(R) W-2275 CPU @ 3.30GHz (14 Cores / 28 Threads)
 * **GPU**: NVIDIA RTX A2000 12GB (3328 CUDA Cores)
@@ -24,7 +24,7 @@ All benchmarks and validations for this project were conducted on a high-perform
 
 ---
 
-## 📊 Final Performance Benchmarks
+## Final Performance Benchmarks
 
 The transition from a sequential CPU model to a massively parallelized CUDA environment resulted in the following performance shifts, significantly improving block processing times.
 
@@ -36,12 +36,12 @@ The transition from a sequential CPU model to a massively parallelized CUDA envi
 
 ---
 
-## 💎 Core Technical Improvements & Code Implementation
+## Core Technical Improvements & Code Implementation
 
 ### 1. Massively Parallel Proof-of-Work (PoW) Miner
 The mining engine was completely re-engineered to utilize the 3,328 cores of the RTX A2000. In a standard CPU model, nonces are tested sequentially, which is the primary bottleneck in block discovery. By migrating this to the GPU, we launch millions of threads in batches, with each thread testing a unique nonce calculated via the block and thread indices. To eliminate the overhead of repeated Global Memory accesses, the block header is stored in `__constant__ unsigned char d_header[256]`. This allows the hardware to perform zero-latency broadcast reads, where the header data is fetched once and provided to all threads in a warp simultaneously, effectively removing memory bandwidth as a limiting factor.
 
-The kernel itself, `mineKernel`, performs a high-speed integer-to-ASCII conversion on the device to append the numeric nonce to the header string. This is a critical custom implementation, as standard C++ libraries like `std::to_string` are unavailable in the CUDA device space. Once the full input string is constructed in a local buffer, the `sha256_device` function is invoked to compute the hash. We achieved the **1,125x speedup** by optimizing for register pressure and using `atomicCAS`. This atomic operation ensures that only the first thread to find a valid hash writes the result back to the host, preventing data races while maintaining an average mining time of just 0.08 seconds.
+The kernel itself, `mineKernel`, performs a high-speed integer-to-ASCII conversion on the device to append the numeric nonce to the header string. Once the full input string is constructed in a local buffer, the `sha256_device` function is invoked to compute the hash. We achieved the **1,125x speedup** by optimizing for register pressure and using `atomicCAS`. This atomic operation ensures that only the first thread to find a valid hash writes the result back to the host, preventing data races while maintaining an average mining time of just 0.08 seconds.
 
 ### 2. Merkle Root Generation via CUDA Dynamic Parallelism (CDP)
 Traditional Merkle tree generation is a recursive process that is highly taxing on the CPU when dealing with large transaction batches. Our implementation utilizes an $O(\log N)$ parallel reduction strategy that collapses the transaction list level by level. A standout feature of this component is the use of **CUDA Dynamic Parallelism (CDP)**, implemented via the `merkleParentKernel`. This "driver" kernel is launched and is responsible for managing the reduction process entirely on the GPU. It autonomously spawns child `merkelKernel` grids to process each level of the tree, which eliminates the significant latency associated with returning control to the CPU to launch a new kernel for every tree level.
@@ -61,25 +61,75 @@ If any thread detects a mismatch or a link break, it uses `atomicExch` to instan
 
 ---
 
-## 🏗 Structural Engineering: The Bridge Implementation
+## Structural Engineering: The Bridge Implementation
 
-A key technical challenge was integrating complex C++ objects with low-level CUDA kernels without causing compilation errors or memory misalignment. To solve this, we developed **`verificationLink.cpp`** as a dedicated bridge layer. This file is responsible for iterating through the high-level `BlockChain` and `Block` objects and "flattening" their state into a vector of simple `VerificationRecord` structs. These structs use fixed-size C-style arrays to store hashes and headers, ensuring that the data layout is perfectly compatible with the GPU's memory architecture.
+A key technical challenge was integrating complex C++ objects with low-level CUDA kernels without causing compilation errors or memory misalignment. To solve this, we developed **`verificationLink.cpp`** as a dedicated bridge layer. This file is responsible for iterating through the high-level `BlockChain` and `Block` objects and "flattening" their state into a vector of simple `VerificationRecord` structs. 
+
+### Architecture Diagram
+
+```text
++-----------------------+       +-------------------------+       +------------------------+
+| C++ Host Environment  |       | Bridge Implementation   |       | CUDA Device (GPU)      |
+| (Object-Oriented)     |       | (verificationLink.cpp)  |       | (Massively Parallel)   |
++-----------------------+       +-------------------------+       +------------------------+
+|                       |       |                         |       |                        |
+| std::vector<Block>    |       |                         |       |                        |
+|  - Block 0            | ----> | 1. Flatten Objects      | ----> | Global Memory          |
+|  - Block 1            |       | 2. Extract Hashes       |       | [VerificationRecord[]] |
+|  - Block N            |       | 3. Build C-Struct Array |       |                        |
+|                       |       |                         |       |        |               |
+|                       |       |                         |       |  cudaMemcpy (PCIe)     |
+|                       |       |                         |       |        v               |
++-----------------------+       +-------------------------+       |  +------------------+  |
+                                                                  |  | verifyChainKernel|  |
+                                                                  |  | (1 Thread/Block) |  |
+                                                                  |  +------------------+  |
+                                                                  +------------------------+
+```
 
 This bridge layer serves two critical purposes:
-1.  **Compiler Decoupling**: By isolating the bridge logic in a `.cpp` file, we ensure that `g++` handles the heavy C++ standard library headers and object-oriented logic, while `nvcc` is restricted to the specialized device code. This prevents the symbol conflicts and performance overhead often associated with `nvcc` attempting to parse complex C++ templates.
-2.  **Optimized Data Marshalling**: The bridge flattens the blockchain into a contiguous raw memory buffer. This allows the `runVerifyKernel` wrapper to perform a single, high-speed `cudaMemcpy` of the entire chain to the device, maximizing PCIe bus efficiency and ensuring the GPU kernels have immediate access to all validation data.
+1.  **Compiler Decoupling**: Ensures `g++` handles the heavy C++ standard library headers, while `nvcc` is restricted to specialized device code.
+2.  **Optimized Data Marshalling**: Flattens the blockchain into a contiguous raw memory buffer for a single, high-speed `cudaMemcpy` of the entire chain to the device.
 
 ---
 
-## 🛠 Build System & Makefile Logic
+## Testing & Benchmarking Methodology
+
+To rigorously benchmark the performance differences between the sequential CPU implementation and the massively parallel CUDA implementation, we utilized an automated testing environment:
+* **Automated Block Generation:** We wrote a custom Bash script to automatically generate and queue 1,000 blocks to the network, each containing an identical payload of 4,000 duplicated messages (simulating a high-volume transaction block).
+* **Sequential Profiling (CPU):** For the C++ CPU baseline, execution time was measured using the standard `<ctime>` library's `clock_t` to calculate the elapsed time for hashing, mining, and verification.
+* **Parallel Profiling (GPU):** To ensure highly accurate GPU profiling without being skewed by CPU multithreading overhead, we utilized CUDA's native `cudaEventRecord` and `cudaEventElapsedTime`. This allowed us to precisely measure the time spent strictly on kernel execution and memory transfers.
+
+---
+
+## Core File Structure & Functionality
+
+*(Note: Networking, HTTP server, and JSON parsing utility files have been omitted from this list to focus on core blockchain and cryptographic logic).*
+
+### Core C++ Implementation
+* **`main.cpp`**: The main entry point. Contains the `main()` function which initializes the node, handles the CLI, and triggers block generation.
+* **`Block.hpp`**: Defines the `Block` class. Contains getters for block attributes and serialization methods.
+* **`BlockChain.hpp`**: Defines the `BlockChain` class. Contains methods to manage the chain (`getBlock()`, `addBlock()`, `getLatestBlockHash()`, `replaceChain()`).
+* **`common.hpp`**: Contains host-side sequential helpers, specifically `getMerkleRoot()` (CPU-based tree generation) and `findHash()` (CPU-based sequential PoW mining).
+* **`hash.hpp`**: Contains `sha256()`, a host-side wrapper utilizing the OpenSSL library for standard string hashing.
+
+### CUDA Hardware Acceleration (`cuda-implementation/src/` & `include/`)
+* **`gpu_mining.cu` & `.h`**: Handles the massively parallel PoW. Contains `mineKernel()` (the mining grid), `hasLeadingZeros()` (device-side validation), and the host wrapper `findHashGPU()`.
+* **`gpu_merkle.cu` & `.h`**: Implements CUDA Dynamic Parallelism. Contains `merkelKernel()` (combines pairs of hashes), `merkleParentKernel()` (dynamic kernel launcher), and `getMerkleRootGPU()`.
+* **`gpu_sha256.cu` & `.h`**: Contains `sha256_device()`, a custom, highly optimized device-side SHA-256 implementation independent of C++ standard libraries.
+* **`gpu_verification.cu` & `.h`**: Handles flat-array chain validation. Contains `verifyChainKernel()`, `bytesToHex()`, `stringsEqual()`, and the host wrapper `runVerifyKernel()`.
+* **`verificationLink.cpp`**: The bridge layer containing `verifyChainGPU()`. Flattens the object-oriented `BlockChain` vector into a contiguous C-style array (`VerificationRecord`) for coalesced GPU memory transfers.
+* **`cuda_error_check.h`**: Contains preprocessor macros (`CUDA_CHECK`, `CUDA_CHECK_KERNEL`) to intercept and decode CUDA runtime errors.
+
+---
+
+## Build System & Makefile Logic
 
 Our **`Makefile`** is engineered to handle a hybrid compilation pipeline that manages both host and device code. We define separate flags for each compiler: `CXXFLAGS` for `g++` and `NVCCFLAGS` for `nvcc`. A critical addition is the `-rdc=true` (Relocatable Device Code) flag in the `NVCCFLAGS`. This is a mandatory requirement for **CUDA Dynamic Parallelism**, as it allows the compiler to generate the necessary metadata for kernels to spawn child execution grids directly from the device.
 
-The final linking stage is performed by `nvcc`, which combines the object files from both compilers. We explicitly link the `-lcudadevrt` library, which provides the device-side runtime required for the Merkle tree's dynamic kernel launches, as well as `-lssl -lcrypto` for standard cryptographic support and `-lboost_system` for the networking framework. This integrated build system ensures that all performance-critical CUDA kernels are perfectly linked with the robust C++ server infrastructure.
-
 ---
 
-## ⚙️ Low-Level Optimization Glossary
+## Low-Level Optimization Glossary
 
 We meticulously utilized specific CUDA keywords and hardware-aware primitives to extract maximum performance from the RTX A2000 hardware:
 * **`__constant__`**: Allocated in the constant cache for block headers and SHA-256 constants, ensuring identical data is broadcast to all threads at once.
@@ -91,13 +141,23 @@ We meticulously utilized specific CUDA keywords and hardware-aware primitives to
 
 ---
 
-## 🚀 Build & Run Instructions
-1.  **Dependencies**: Ensure NVIDIA Driver, CUDA Toolkit 11.5+, OpenSSL, and Boost are installed.
-2.  **Compile**: Run `make` to trigger the hybrid compilation pipeline.
-3.  **Run**: Execute `./main` to start the blockchain node.
-4.  **Verification**: Follow the command-line prompts to initialize the node. The system will report precise GPU execution times for mining, Merkle generation, and verification in real-time.
+## Build & Run Instructions
+
+1. **Install Dependencies (Ubuntu/Debian)**: 
+   ```bash
+   sudo apt-get update
+   sudo apt-get install build-essential nvidia-cuda-toolkit libssl-dev libboost-all-dev
+   ```
+2. **Compile**: Run `make` to trigger the hybrid compilation pipeline.
+3. **Run the Node**: Execute `./main` to start the blockchain node.
+4. **Automated Testing**: Run the automated block generator script to queue 1,000 blocks:
+   ```bash
+   bash test_scripts/generate_1000_blocks.sh localhost <PORT_NUMBER>
+   ```
+5. **Verification**: Follow the command-line prompts to initialize the node. The system will report precise GPU execution times for mining, Merkle generation, and verification in real-time.
 
 ---
+
 
 ## 📝 Conclusion
 By offloading the most expensive cryptographic and data-structure operations to the GPU's 3,328 cores, we have successfully reduced block discovery and validation latency from **minutes to milliseconds**. This project proves that high-performance hardware acceleration is the definitive path to scaling the next generation of decentralized networks.
