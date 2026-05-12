@@ -5,6 +5,8 @@
 #include <vector>
 #include <memory>
 #include <stdexcept>
+#include <atomic>
+#include <thread>
 
 #include "hash.hpp"
 #include "Block.hpp"
@@ -19,12 +21,14 @@ using json = nlohmann::json;
 
 using namespace std;
 
+
 #include "client_http.hpp"
 #include "server_http.hpp"
 
 using HttpServer = SimpleWeb::Server<SimpleWeb::HTTP>;
 using HttpClient = SimpleWeb::Client<SimpleWeb::HTTP>;
-
+//global interrupt switch
+    std::atomic<bool> networkInterrupt(false);
 /*
 Hash header: index + prevHash + merkleRoot(data) + nonce
 */
@@ -129,6 +133,7 @@ int main() {
             json content = json::parse(request->content);
             if (content["length"].get<int>() > bc.getNumOfBlocks()){
                 bc.replaceChain(content);
+                networkInterrupt.store(true); // Interrupts any mining that is currently happening
                 cout << "----Replaced current chain with new one" << endl;
                 response->write("Replaced Chain\n");
             }
@@ -196,17 +201,21 @@ int main() {
                     continue;
                 }
                 // mine for the has
+                networkInterrupt.store(false); // reset interrupt flag
                 string header= to_string(bc.getNumOfBlocks()) + bc.getLatestBlockHash() + getMerkleRootGPU(v,'v');
-                auto pair = findHashGPU(const_cast<char*>(header.c_str()));
+                auto pair = findHashGPU(const_cast<char*>(header.c_str()),&networkInterrupt);
                 // add the block to the blockchain
-                bc.addBlock(bc.getNumOfBlocks(),bc.getLatestBlockHash(),pair.first,pair.second,v );
-                if(verifyChainGPU(bc)){
-                    printf("=> Valid Blockchain\n");
-                    sendNewChain(&listOfNodes,bc.toJSON());
+                if(pair.first!="fail"){
+                    bc.addBlock(bc.getNumOfBlocks(),bc.getLatestBlockHash(),pair.first,pair.second,v );
+                    if(verifyChainGPU(bc)){
+                        printf("=> Valid Blockchain\n");
+                        sendNewChain(&listOfNodes,bc.toJSON());
+                    }
+                    else {
+                        printf("=> InValid Blockchain Not Sent\n");
+                    }
                 }
-                else {
-                printf("=> InValid Blockchain Not Sent\n");
-                }
+                
                 // send the blockchain to the network
                 
             }
