@@ -38,10 +38,19 @@ The transition from a sequential CPU model to a massively parallelized CUDA envi
 
 ## Core Technical Improvements & Code Implementation
 
-### 1. Massively Parallel Proof-of-Work (PoW) Miner
+### 1. Massively Parallel Proof-of-Work (PoW) Miner & Zero-Copy Interrupt System
 The mining engine was completely re-engineered to utilize the 3,328 cores of the RTX A2000. In a standard CPU model, nonces are tested sequentially, which is the primary bottleneck in block discovery. By migrating this to the GPU, we launch millions of threads in batches, with each thread testing a unique nonce calculated via the block and thread indices. To eliminate the overhead of repeated Global Memory accesses, the block header is stored in `__constant__ unsigned char d_header[256]`. This allows the hardware to perform zero-latency broadcast reads, where the header data is fetched once and provided to all threads in a warp simultaneously, effectively removing memory bandwidth as a limiting factor.
 
-The kernel itself, `mineKernel`, performs a high-speed integer-to-ASCII conversion on the device to append the numeric nonce to the header string. Once the full input string is constructed in a local buffer, the `sha256_device` function is invoked to compute the hash. We achieved the **1,125x speedup** by optimizing for register pressure and using `atomicCAS`. This atomic operation ensures that only the first thread to find a valid hash writes the result back to the host, preventing data races while maintaining an average mining time of just 0.08 seconds.
+The kernel itself, `mineKernel`, utilizes a Grid-Stride Loop and performs a high-speed integer-to-ASCII conversion on the device to append the numeric 64-bit nonce (`unsigned long long`) to the header string. Once the full input string is constructed in a local buffer, the `sha256_device` function is invoked to compute the hash. We achieved the **1,125x speedup** by optimizing for register pressure and using `atomicCAS`. This atomic operation ensures that only the first thread to find a valid hash writes the result back to the host, preventing data races while maintaining an average mining time of just 0.08 seconds.
+
+**Preventing Blockchain Corruption via CUDA Streams & Asynchronous Interrupts:**
+A critical challenge in decentralized networking is "Network Consensus" race conditions: if Node A and Node B are mining the same block, and Node A wins, Node B must instantly discard its work to prevent appending a stale block and corrupting the chain. Standard CUDA kernel launches are blocking, meaning a CPU cannot receive incoming HTTP network updates while the GPU is infinitely looping to find a hash.
+
+To solve this, we architected an **Asynchronous Zero-Copy Interrupt System**:
+* **CUDA Streams:** The `mineKernel` is launched asynchronously on a custom `cudaStream_t`. This completely unblocks the CPU, allowing the C++ host to yield to the HTTP server threads and listen for incoming blocks over the network while the GPU crunches hashes in the background.
+* **Mapped Memory & `volatile` Flags:** We bypassed the standard PCIe `cudaMemcpy` bottleneck (which causes deadlocks when waiting for a kernel to finish) by utilizing `cudaHostAllocMapped` to create "Zero-Copy" shared RAM. We map a `volatile int* abortFlag` directly from the CPU's motherboard RAM into the GPU's memory space. 
+* **The Inter-Process Communication:** If a `POST /newchain` request hits the server, indicating another node won the block, the HTTP thread flips a global `std::atomic<bool> networkInterrupt` to `true`. The CPU instantly updates the mapped `abortFlag`. Inside the GPU, the `mineKernel` checks this `volatile` flag every 64 iterations. 
+* **The Result:** The GPU reads the voltage change directly across the PCIe bus and commits "kernel suicide" in sub-milliseconds. The mining loop breaks, the stale block is discarded cleanly, and the node safely adopts the winner's chain. This completely eliminates synchronization forks and chain corruption.
 
 ### 2. Merkle Root Generation via CUDA Dynamic Parallelism (CDP)
 Traditional Merkle tree generation is a recursive process that is highly taxing on the CPU when dealing with large transaction batches. Our implementation utilizes an $O(\log N)$ parallel reduction strategy that collapses the transaction list level by level. A standout feature of this component is the use of **CUDA Dynamic Parallelism (CDP)**, implemented via the `merkleParentKernel`. This "driver" kernel is launched and is responsible for managing the reduction process entirely on the GPU. It autonomously spawns child `merkelKernel` grids to process each level of the tree, which eliminates the significant latency associated with returning control to the CPU to launch a new kernel for every tree level.
@@ -53,7 +62,7 @@ Chain verification is typically a linear $O(N)$ process on the CPU, where each b
 
 We achieved a **35.7x speedup** by verifying 1,000 blocks in a mere 0.0007s, down from a 0.025s CPU baseline. To ensure absolute integrity, we utilized the `__restrict__` keyword on the `VerificationRecord` pointers. This provides a hint to the compiler that the data buffers do not alias, enabling the hardware to coalesce memory reads and reorder instructions for maximum throughput. If any thread detects a mismatch or a link break, it uses `atomicExch` to instantly signal a global failure flag back to the host. This "fail-fast" mechanism allows the entire chain's validity to be determined in the time it takes to verify the single most complex block.
 
-We achieved a **35.7x speedup** by verifying 1,000 blocks in a mere 0.0007s, down from a 0.025s CPU baseline. To ensure absolute integrity, we utilized the `__restrict__` keyword on the `VerificationRecord` pointers. This provides a hint to the compiler that the data buffers do not alias, enabling the hardware to coalesce memory reads and reorder instructions for maximum throughput.
+We achieved a **35.7x speedup** by verifying 1,000 blocks in a mere 0.0007s, down from a 0.025s CPU baseline. To ensure absolute integrity, we utilized the `__restrict__` keyword on the `VerificationRecord` pointers. This provides a hint to the compiler that the data buffers do not alias, enabling the hardware to coalesce memory reads and reorder instructions for maximum throughput. 
 
 > **Note on Scale:** These metrics were captured within a sandbox auto-miner environment for initial testing. In a production scenario with significantly higher block volumes, the parallel efficiency of the GPU would scale further, likely resulting in even greater speedup ratios.
 
@@ -107,14 +116,14 @@ To rigorously benchmark the performance differences between the sequential CPU i
 *(Note: Networking, HTTP server, and JSON parsing utility files have been omitted from this list to focus on core blockchain and cryptographic logic).*
 
 ### Core C++ Implementation
-* **`main.cpp`**: The main entry point. Contains the `main()` function which initializes the node, handles the CLI, and triggers block generation.
+* **`main.cpp`**: The main entry point. Contains the `main()` function which initializes the node, handles the CLI, manages the `std::atomic<bool> networkInterrupt` flag for network races, and triggers block generation.
 * **`Block.hpp`**: Defines the `Block` class. Contains getters for block attributes and serialization methods.
 * **`BlockChain.hpp`**: Defines the `BlockChain` class. Contains methods to manage the chain (`getBlock()`, `addBlock()`, `getLatestBlockHash()`, `replaceChain()`).
 * **`common.hpp`**: Contains host-side sequential helpers, specifically `getMerkleRoot()` (CPU-based tree generation) and `findHash()` (CPU-based sequential PoW mining).
 * **`hash.hpp`**: Contains `sha256()`, a host-side wrapper utilizing the OpenSSL library for standard string hashing.
 
 ### CUDA Hardware Acceleration (`cuda-implementation/src/` & `include/`)
-* **`gpu_mining.cu` & `.h`**: Handles the massively parallel PoW. Contains `mineKernel()` (the mining grid), `hasLeadingZeros()` (device-side validation), and the host wrapper `findHashGPU()`.
+* **`gpu_mining.cu` & `.h`**: Handles the massively parallel PoW and asynchronous GPU interrupts. Contains `mineKernel()` (the grid-stride mining loop), `hasLeadingZeros()` (device-side validation), and the host wrapper `findHashGPU()`.
 * **`gpu_merkle.cu` & `.h`**: Implements CUDA Dynamic Parallelism. Contains `merkelKernel()` (combines pairs of hashes), `merkleParentKernel()` (dynamic kernel launcher), and `getMerkleRootGPU()`.
 * **`gpu_sha256.cu` & `.h`**: Contains `sha256_device()`, a custom, highly optimized device-side SHA-256 implementation independent of C++ standard libraries.
 * **`gpu_verification.cu` & `.h`**: Handles flat-array chain validation. Contains `verifyChainKernel()`, `bytesToHex()`, `stringsEqual()`, and the host wrapper `runVerifyKernel()`.
@@ -132,6 +141,9 @@ Our **`Makefile`** is engineered to handle a hybrid compilation pipeline that ma
 ## Low-Level Optimization Glossary
 
 We meticulously utilized specific CUDA keywords and hardware-aware primitives to extract maximum performance from the RTX A2000 hardware:
+* **`cudaStream_t`**: Used to launch the Proof-of-Work kernel asynchronously. This decoupled the GPU from the CPU, allowing the host to remain highly responsive to HTTP network updates while mining.
+* **`cudaHostAllocMapped`**: Allocated "Zero-Copy" mapped memory for the abort flags. This created a direct bridge over the PCIe bus, allowing the CPU to instantly terminate the mining kernel without invoking a blocking `cudaMemcpy`.
+* **`volatile`**: Applied to the interrupt pointers passed to the kernel, forcing the GPU to bypass its internal L1/L2 cache and read the abort status directly from the physical mapped RAM every iteration.
 * **`__constant__`**: Allocated in the constant cache for block headers and SHA-256 constants, ensuring identical data is broadcast to all threads at once.
 * **`__restrict__`**: A pointer decoration that guarantees no memory aliasing, enabling the compiler to use specialized load instructions.
 * **`__launch_bounds__(256)`**: A kernel-level hint that informs the compiler of the exact thread count, allowing for optimized register allocation per multiprocessor.
@@ -154,6 +166,5 @@ We meticulously utilized specific CUDA keywords and hardware-aware primitives to
 
 ---
 
-
 ## 📝 Conclusion
-By offloading the most expensive cryptographic and data-structure operations to the GPU's 3,328 cores, we have successfully reduced block discovery and validation latency from **minutes to milliseconds**. This project proves that high-performance hardware acceleration is the definitive path to scaling the next generation of decentralized networks.
+By offloading the most expensive cryptographic and data-structure operations to the GPU's 3,328 cores, we have successfully reduced block discovery and validation latency from **minutes to milliseconds**. Furthermore, the implementation of mapped memory and asynchronous streaming ensures bulletproof network consensus, immediately halting redundant work without corrupting the chain. This project proves that high-performance hardware acceleration, paired with sophisticated memory management, is the definitive path to scaling the next generation of decentralized networks.
