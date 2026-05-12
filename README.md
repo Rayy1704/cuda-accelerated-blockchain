@@ -150,11 +150,7 @@ We meticulously utilized specific CUDA keywords and hardware-aware primitives to
    ```
 2. **Compile**: Run `make` to trigger the hybrid compilation pipeline.
 3. **Run the Node**: Execute `./main` to start the blockchain node.
-4. **Automated Testing**: Run the automated block generator script to queue 1,000 blocks:
-   ```bash
-   bash test_scripts/generate_1000_blocks.sh localhost <PORT_NUMBER>
-   ```
-5. **Verification**: Follow the command-line prompts to initialize the node. The system will report precise GPU execution times for mining, Merkle generation, and verification in real-time.
+4. **Verification**: Follow the command-line prompts to initialize the node. The system will report precise GPU execution times for mining, Merkle generation, and verification in real-time.
 
 ---
 
