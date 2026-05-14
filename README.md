@@ -13,7 +13,7 @@
 | **Languages** | ![C++](https://img.shields.io/badge/C++-00599C?style=for-the-badge&logo=c%2B%2B&logoColor=white) ![CUDA](https://img.shields.io/badge/CUDA-76B900?style=for-the-badge&logo=nvidia&logoColor=white) |
 | **Hardware** | ![NVIDIA](https://img.shields.io/badge/NVIDIA_RTX-76B900?style=for-the-badge&logo=nvidia&logoColor=white) ![Intel](https://img.shields.io/badge/Intel_Xeon-0071C5?style=for-the-badge&logo=intel&logoColor=white) |
 | **Environment** | ![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black) ![Git](https://img.shields.io/badge/Git-F05032?style=for-the-badge&logo=git&logoColor=white) |
-| **Editors** | ![Neovim](https://img.shields.io/badge/Neovim-57A143?style=for-the-badge&logo=neovim&logoColor=white) ![Vim](https://img.shields.io/badge/Vim-199147?style=for-the-badge&logo=vim&logoColor=white) |
+| **Editors** | ![Visual Studio Code](https://img.shields.io/badge/Visual%20Studio%20Code-0078d7.svg?style=for-the-badge&logo=visual-studio-code&logoColor=white) |
 
 ### Hardware Configuration
 All benchmarks and validations for this project were conducted on a high-performance workstation to ensure consistent data and maximize GPU utilization:
