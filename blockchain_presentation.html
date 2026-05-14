@@ -1,0 +1,1611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CUDA-Accelerated Blockchain</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #040810;
+    --bg2: #070d1a;
+    --cyan: #00f5ff;
+    --green: #00ff88;
+    --purple: #bf5fff;
+    --orange: #ff6b35;
+    --white: #e8f4f8;
+    --dim: #4a6a7a;
+    --card: rgba(0,245,255,0.04);
+    --border: rgba(0,245,255,0.15);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--white);
+    font-family: 'Rajdhani', sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    cursor: none;
+  }
+
+  /* Custom cursor */
+  .cursor {
+    position: fixed;
+    width: 12px; height: 12px;
+    border: 2px solid var(--cyan);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    transition: transform 0.1s;
+    transform: translate(-50%, -50%);
+  }
+  .cursor-trail {
+    position: fixed;
+    width: 4px; height: 4px;
+    background: var(--cyan);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9998;
+    opacity: 0.5;
+    transform: translate(-50%, -50%);
+    transition: all 0.15s ease;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,245,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,245,255,0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Scanlines */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.15) 2px,
+      rgba(0,0,0,0.15) 4px
+    );
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* Slides container */
+  #slides {
+    position: relative;
+    z-index: 2;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 60px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.6s ease;
+    overflow: hidden;
+  }
+  .slide.active {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  /* Navigation */
+  #nav {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    z-index: 100;
+  }
+
+  .nav-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--cyan);
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    padding: 8px 20px;
+    cursor: pointer;
+    letter-spacing: 2px;
+    transition: all 0.3s;
+    clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+  }
+  .nav-btn:hover {
+    background: rgba(0,245,255,0.1);
+    border-color: var(--cyan);
+    box-shadow: 0 0 20px rgba(0,245,255,0.3);
+  }
+
+  #slide-counter {
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--dim);
+    font-size: 12px;
+    min-width: 80px;
+    text-align: center;
+  }
+
+  /* Progress bar */
+  #progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--cyan), var(--green));
+    transition: width 0.4s ease;
+    z-index: 100;
+    box-shadow: 0 0 10px var(--cyan);
+  }
+
+  /* Section label */
+  .section-tag {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--cyan);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    opacity: 0.7;
+  }
+
+  /* Headings */
+  h1 {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(28px, 4vw, 52px);
+    font-weight: 900;
+    line-height: 1.1;
+    letter-spacing: 2px;
+  }
+  h2 {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(20px, 2.5vw, 34px);
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 28px;
+  }
+  h3 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: clamp(14px, 1.6vw, 20px);
+    font-weight: 600;
+    color: var(--cyan);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .glow-cyan { color: var(--cyan); text-shadow: 0 0 20px rgba(0,245,255,0.6); }
+  .glow-green { color: var(--green); text-shadow: 0 0 20px rgba(0,255,136,0.6); }
+  .glow-purple { color: var(--purple); text-shadow: 0 0 20px rgba(191,95,255,0.6); }
+  .glow-orange { color: var(--orange); text-shadow: 0 0 20px rgba(255,107,53,0.6); }
+
+  /* Cards */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 20px 24px;
+    position: relative;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: -1px; left: 20px;
+    width: 40px; height: 2px;
+    background: var(--cyan);
+    box-shadow: 0 0 10px var(--cyan);
+  }
+
+  /* Code blocks */
+  .code {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(11px, 1.1vw, 14px);
+    background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(0,245,255,0.1);
+    border-left: 3px solid var(--cyan);
+    padding: 14px 18px;
+    line-height: 1.7;
+    white-space: pre;
+    overflow-x: auto;
+  }
+
+  .code .kw { color: var(--purple); }
+  .code .fn { color: var(--cyan); }
+  .code .str { color: var(--green); }
+  .code .num { color: var(--orange); }
+  .code .cm { color: var(--dim); }
+
+  /* Grid layouts */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; width: 100%; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; width: 100%; }
+
+  p, li {
+    font-size: clamp(13px, 1.3vw, 17px);
+    line-height: 1.7;
+    color: rgba(232,244,248,0.85);
+  }
+  ul { padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  li::marker { color: var(--cyan); }
+
+  strong { color: var(--cyan); font-weight: 600; }
+
+  /* Benchmark table */
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--cyan);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 14px;
+    text-align: left;
+  }
+  td {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(0,245,255,0.05);
+  }
+  tr:hover td { background: rgba(0,245,255,0.03); }
+
+  /* Speedup badge */
+  .badge {
+    display: inline-block;
+    background: rgba(0,255,136,0.1);
+    border: 1px solid var(--green);
+    color: var(--green);
+    font-family: 'Orbitron', monospace;
+    font-size: 12px;
+    padding: 3px 10px;
+    letter-spacing: 1px;
+    font-weight: 700;
+  }
+
+  .badge-purple {
+    background: rgba(191,95,255,0.1);
+    border-color: var(--purple);
+    color: var(--purple);
+  }
+  .badge-orange {
+    background: rgba(255,107,53,0.1);
+    border-color: var(--orange);
+    color: var(--orange);
+  }
+
+  /* Hash display */
+  .hash-display {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: var(--green);
+    word-break: break-all;
+    opacity: 0.8;
+    padding: 8px;
+    background: rgba(0,255,136,0.05);
+    border-left: 2px solid var(--green);
+  }
+
+  /* Block anatomy visual */
+  .block-visual {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    width: 100%;
+  }
+  .block-row {
+    display: flex;
+    align-items: stretch;
+    border-bottom: 1px solid var(--border);
+  }
+  .block-row:last-child { border-bottom: none; }
+  .block-label {
+    font-family: 'Orbitron', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--cyan);
+    background: rgba(0,245,255,0.07);
+    padding: 10px 14px;
+    min-width: 130px;
+    display: flex;
+    align-items: center;
+    border-right: 1px solid var(--border);
+  }
+  .block-value {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: rgba(232,244,248,0.7);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    flex: 1;
+    word-break: break-all;
+  }
+
+  /* Chain link visual */
+  .chain-visual {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    width: 100%;
+    overflow: hidden;
+  }
+  .chain-block {
+    flex: 1;
+    border: 1px solid var(--border);
+    padding: 12px;
+    text-align: center;
+    position: relative;
+  }
+  .chain-arrow {
+    color: var(--cyan);
+    font-size: 20px;
+    padding: 0 8px;
+    flex-shrink: 0;
+    text-shadow: 0 0 10px var(--cyan);
+  }
+
+  /* Merkle tree */
+  .merkle-tree {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .merkle-row {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+  }
+  .merkle-node {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    padding: 6px 10px;
+    border: 1px solid;
+    text-align: center;
+  }
+  .merkle-node.leaf { border-color: rgba(0,255,136,0.4); color: var(--green); }
+  .merkle-node.mid { border-color: rgba(0,245,255,0.4); color: var(--cyan); }
+  .merkle-node.root { border-color: var(--purple); color: var(--purple); font-size: 11px; padding: 8px 16px; }
+
+  /* Architecture diagram */
+  .arch-box {
+    border: 1px solid var(--border);
+    padding: 14px 18px;
+    position: relative;
+    text-align: center;
+    background: var(--card);
+  }
+  .arch-box .arch-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--cyan);
+    margin-bottom: 8px;
+  }
+  .arch-box .arch-sub {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--dim);
+  }
+  .arch-arrow-down {
+    text-align: center;
+    color: var(--cyan);
+    font-size: 18px;
+    text-shadow: 0 0 10px var(--cyan);
+    margin: 4px 0;
+  }
+
+  /* Keyword pills */
+  .pill-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .pill {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    padding: 5px 12px;
+    border: 1px solid rgba(191,95,255,0.4);
+    color: var(--purple);
+    background: rgba(191,95,255,0.06);
+  }
+  .pill.green {
+    border-color: rgba(0,255,136,0.4);
+    color: var(--green);
+    background: rgba(0,255,136,0.06);
+  }
+  .pill.orange {
+    border-color: rgba(255,107,53,0.4);
+    color: var(--orange);
+    background: rgba(255,107,53,0.06);
+  }
+
+  /* Glowing divider */
+  .divider {
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    margin: 16px 0;
+  }
+
+  /* Stream diagram */
+  .stream-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    width: 100%;
+    margin: 6px 0;
+  }
+  .stream-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--dim);
+    width: 80px;
+    flex-shrink: 0;
+  }
+  .stream-bar {
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    position: relative;
+  }
+  .stream-bar.transfer {
+    background: rgba(191,95,255,0.2);
+    border: 1px solid rgba(191,95,255,0.4);
+    color: var(--purple);
+  }
+  .stream-bar.compute {
+    background: rgba(0,245,255,0.15);
+    border: 1px solid rgba(0,245,255,0.4);
+    color: var(--cyan);
+  }
+  .stream-bar.idle {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.05);
+    color: var(--dim);
+  }
+
+  /* Neon line accent */
+  .neon-line {
+    width: 60px;
+    height: 3px;
+    background: var(--cyan);
+    box-shadow: 0 0 12px var(--cyan);
+    margin: 12px auto;
+  }
+
+  /* Floating particles */
+  .particles {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    overflow: hidden;
+  }
+  .particle {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background: var(--cyan);
+    border-radius: 50%;
+    animation: float-up linear infinite;
+    opacity: 0;
+  }
+  @keyframes float-up {
+    0% { transform: translateY(100vh) translateX(0); opacity: 0; }
+    10% { opacity: 0.6; }
+    90% { opacity: 0.4; }
+    100% { transform: translateY(-10vh) translateX(30px); opacity: 0; }
+  }
+
+  /* Title slide specific */
+  .title-gfx {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .hex-ring {
+    position: absolute;
+    border: 1px solid rgba(0,245,255,0.08);
+    border-radius: 50%;
+    animation: spin linear infinite;
+  }
+  @keyframes spin {
+    from { transform: translate(-50%,-50%) rotate(0deg); }
+    to { transform: translate(-50%,-50%) rotate(360deg); }
+  }
+  .subtitle-text {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(11px, 1.2vw, 14px);
+    color: var(--dim);
+    letter-spacing: 3px;
+    margin-top: 10px;
+  }
+  .authors {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: clamp(14px, 1.5vw, 18px);
+    color: var(--white);
+    letter-spacing: 2px;
+    opacity: 0.9;
+  }
+
+  /* Scrollable content */
+  .scroll-content {
+    max-height: 70vh;
+    overflow-y: auto;
+    width: 100%;
+    padding-right: 8px;
+  }
+  .scroll-content::-webkit-scrollbar { width: 3px; }
+  .scroll-content::-webkit-scrollbar-track { background: transparent; }
+  .scroll-content::-webkit-scrollbar-thumb { background: var(--cyan); }
+
+  /* Tiny tag */
+  .tag {
+    display: inline-block;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--bg);
+    background: var(--cyan);
+    padding: 2px 8px;
+    margin-right: 6px;
+    font-weight: 700;
+  }
+  .tag.green { background: var(--green); }
+  .tag.purple { background: var(--purple); }
+  .tag.orange { background: var(--orange); }
+
+  /* Hardware spec */
+  .spec-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(0,245,255,0.06);
+    font-size: 14px;
+  }
+  .spec-key { color: var(--dim); font-family: 'Share Tech Mono', monospace; font-size: 12px; }
+  .spec-val { color: var(--white); font-family: 'Share Tech Mono', monospace; font-size: 12px; }
+
+</style>
+</head>
+<body>
+
+<div class="cursor" id="cursor"></div>
+<div class="cursor-trail" id="cursorTrail"></div>
+
+<div id="progress"></div>
+
+<div class="particles" id="particles"></div>
+
+<div id="slides">
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 1: TITLE -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide active" id="s1">
+    <div class="title-gfx">
+      <div class="hex-ring" style="width:600px;height:600px;left:50%;top:50%;animation-duration:40s;"></div>
+      <div class="hex-ring" style="width:400px;height:400px;left:50%;top:50%;animation-duration:25s;animation-direction:reverse;border-color:rgba(0,255,136,0.06);"></div>
+      <div class="hex-ring" style="width:800px;height:800px;left:50%;top:50%;animation-duration:60s;border-color:rgba(191,95,255,0.04);"></div>
+    </div>
+    <div style="text-align:center;position:relative;z-index:2;">
+      <div class="section-tag">GIKI — FACULTY OF CS&E — DR. TAJ MUHAMMAD KHAN</div>
+      <h1 class="glow-cyan" style="font-size:clamp(24px,4vw,56px);letter-spacing:4px;">CUDA-ACCELERATED</h1>
+      <h1 style="color:var(--white);font-size:clamp(20px,3vw,44px);letter-spacing:6px;margin-top:4px;">BLOCKCHAIN</h1>
+      <div class="neon-line"></div>
+      <div class="subtitle-text">HIGH-THROUGHPUT PARALLEL CRYPTOGRAPHIC FRAMEWORK</div>
+      <div style="margin-top:32px;">
+        <div class="authors">RAYYAN HASSAN SALMAN &nbsp;·&nbsp; AHMAD IBRAHIM AHMED</div>
+        <div class="subtitle-text" style="margin-top:8px;">2023601 &nbsp;&nbsp;&nbsp; 2023066</div>
+      </div>
+      <div style="margin-top:28px;display:flex;justify-content:center;gap:16px;flex-wrap:wrap;">
+        <span class="badge">RTX A2000</span>
+        <span class="badge badge-purple">3328 CUDA CORES</span>
+        <span class="badge badge-orange">1125× SPEEDUP</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 2: WHAT IS A BLOCKCHAIN -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s2">
+    <div class="section-tag">BLOCKCHAIN FUNDAMENTALS — 01</div>
+    <h2>WHAT IS A <span class="glow-cyan">BLOCKCHAIN?</span></h2>
+    <div class="grid-2" style="gap:24px;">
+      <div>
+        <div class="card" style="margin-bottom:16px;">
+          <h3>CORE DEFINITION</h3>
+          <p>A blockchain is a <strong>distributed, append-only ledger</strong> — a sequence of cryptographically linked blocks, each containing data, a timestamp, and the hash of the previous block. Once written, data is computationally infeasible to alter without invalidating every subsequent block.</p>
+        </div>
+        <div class="card">
+          <h3>KEY PROPERTIES</h3>
+          <ul>
+            <li><strong>Immutability</strong> — altering a block breaks the chain</li>
+            <li><strong>Decentralisation</strong> — no single point of control</li>
+            <li><strong>Transparency</strong> — all nodes share the same ledger</li>
+            <li><strong>Consensus</strong> — nodes agree via Proof-of-Work</li>
+            <li><strong>Byzantine Fault Tolerance</strong> — survives malicious nodes</li>
+          </ul>
+        </div>
+      </div>
+      <div>
+        <div class="chain-visual" style="margin-bottom:16px;">
+          <div class="chain-block">
+            <div style="font-family:'Orbitron',monospace;font-size:9px;color:var(--dim);margin-bottom:6px;">GENESIS</div>
+            <div class="hash-display">00000044…c8</div>
+          </div>
+          <div class="chain-arrow">→</div>
+          <div class="chain-block">
+            <div style="font-family:'Orbitron',monospace;font-size:9px;color:var(--dim);margin-bottom:6px;">BLOCK 1</div>
+            <div class="hash-display">00000091…3f</div>
+          </div>
+          <div class="chain-arrow">→</div>
+          <div class="chain-block">
+            <div style="font-family:'Orbitron',monospace;font-size:9px;color:var(--dim);margin-bottom:6px;">BLOCK N</div>
+            <div class="hash-display">000000b2…7a</div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>WHY IT MATTERS</h3>
+          <p>The bottleneck of traditional blockchains is <strong>sequential CPU execution</strong> — one hash at a time. Networks like Ethereum's EVM are limited in Transactions Per Second (TPS) by this constraint. Our project proves that <strong>GPU parallelism breaks this ceiling.</strong></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 3: ANATOMY OF A BLOCK -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s3">
+    <div class="section-tag">BLOCKCHAIN FUNDAMENTALS — 02</div>
+    <h2>ANATOMY OF A <span class="glow-green">BLOCK</span></h2>
+    <div class="grid-2" style="gap:24px;width:100%;">
+      <div>
+        <div class="block-visual">
+          <div class="block-row">
+            <div class="block-label">INDEX</div>
+            <div class="block-value" style="color:var(--orange);">0, 1, 2, … N</div>
+          </div>
+          <div class="block-row">
+            <div class="block-label">PREV HASH</div>
+            <div class="block-value">000000000000000440346916…</div>
+          </div>
+          <div class="block-row">
+            <div class="block-label">BLOCK HASH</div>
+            <div class="block-value" style="color:var(--green);">000000b2c7f3a9e1d4…</div>
+          </div>
+          <div class="block-row">
+            <div class="block-label">NONCE</div>
+            <div class="block-value" style="color:var(--purple);">4839217 (found by PoW)</div>
+          </div>
+          <div class="block-row">
+            <div class="block-label">MERKLE ROOT</div>
+            <div class="block-value">sha256(sha256(tx₀)‖sha256(tx₁)‖…)</div>
+          </div>
+          <div class="block-row" style="border-bottom:none;">
+            <div class="block-label">DATA</div>
+            <div class="block-value">vector&lt;string&gt; — 4000 entries</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>HEADER CONSTRUCTION</h3>
+          <div class="code"><span class="cm">// from BlockChain.hpp addBlock()</span>
+string header =
+  <span class="fn">to_string</span>(index)
+  + prevHash
+  + <span class="fn">getMerkleRootGPU</span>(merkle)
+  + nonce;</div>
+        </div>
+        <div class="card">
+          <h3>VALIDITY RULES</h3>
+          <ul>
+            <li><strong>sha256(header) == blockHash</strong> — recomputed must match stored</li>
+            <li><strong>hash.substr(0,6) == "000000"</strong> — 6 leading zeros required</li>
+            <li><strong>index == blockchain.size()</strong> — correct sequence position</li>
+            <li><strong>prevHash links</strong> — must match prior block's hash</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 4: SHA-256 & HASHING -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s4">
+    <div class="section-tag">BLOCKCHAIN FUNDAMENTALS — 03</div>
+    <h2>SHA-256 & <span class="glow-purple">CRYPTOGRAPHIC HASHING</span></h2>
+    <div class="grid-2" style="gap:24px;">
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>WHAT IS A HASH FUNCTION?</h3>
+          <p>SHA-256 maps any input to a <strong>fixed 256-bit (32-byte) digest</strong>. Deterministic, one-way, and avalanche-effect driven — a single bit change flips ~50% of output bits.</p>
+        </div>
+        <div style="margin-bottom:14px;">
+          <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--dim);margin-bottom:6px;">INPUT → SHA-256 → OUTPUT</div>
+          <div class="hash-display" style="margin-bottom:6px;">"Genesis Block!" →</div>
+          <div class="hash-display">000000440346916553ce530e69235e945b5278abe48d98cd162ec8c62a02eb2c</div>
+        </div>
+        <div class="card">
+          <h3>WHY IT ENSURES IMMUTABILITY</h3>
+          <p>Change one byte in Block 3 → its hash changes → Block 4's <strong>prevHash</strong> is now wrong → Block 4's hash changes → cascading invalidation of every subsequent block.</p>
+        </div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>SHA-256 INTERNALS (64 ROUNDS)</h3>
+          <div class="code"><span class="cm">// Our device-side implementation</span>
+<span class="kw">__device__</span> <span class="kw">void</span> <span class="fn">sha256_device</span>(
+  <span class="kw">const</span> uchar* input, <span class="kw">int</span> len,
+  uchar* output)
+
+<span class="cm">// Macros using only bit arithmetic:</span>
+<span class="fn">ROTR</span>(x,n)  → rotate right
+<span class="fn">CH</span>(x,y,z)  → choice function
+<span class="fn">MAJ</span>(x,y,z) → majority function
+<span class="fn">EP0/EP1</span>    → sigma expansions
+<span class="fn">SIG0/SIG1</span>  → message schedule</div>
+        </div>
+        <div class="card">
+          <h3>KEY INSIGHT FOR GPU</h3>
+          <p>SHA-256 is <strong>pure integer arithmetic</strong> — shifts, XORs, additions. No library calls. Every thread can run a complete, independent SHA-256 using only its own registers. Zero shared state between threads.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 5: MINING & PROOF OF WORK -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s5">
+    <div class="section-tag">BLOCKCHAIN FUNDAMENTALS — 04</div>
+    <h2>MINING & <span class="glow-orange">PROOF OF WORK</span></h2>
+    <div class="grid-2" style="gap:24px;">
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>THE COMPUTATIONAL PUZZLE</h3>
+          <p>Mining = finding a <strong>nonce N</strong> such that:</p>
+          <div class="hash-display" style="margin:10px 0;">sha256(index‖prevHash‖merkleRoot‖N)<br>must start with <span style="color:var(--cyan);">000000</span>…</div>
+          <p>Probability: 1 in 16⁶ ≈ <strong>1 in 16 million</strong> per attempt. Only brute force works — no shortcut exists.</p>
+        </div>
+        <div class="card">
+          <h3>CPU BASELINE (SEQUENTIAL)</h3>
+          <div class="code"><span class="cm">// Original findHash() — one nonce at a time</span>
+<span class="kw">for</span> (nonce = <span class="num">0</span>; nonce &lt; <span class="num">100000000000</span>; nonce++) {
+  hash = <span class="fn">sha256</span>(header + <span class="fn">to_string</span>(nonce));
+  <span class="kw">if</span> (hash.substr(<span class="num">0</span>,<span class="num">6</span>) == <span class="str">"000000"</span>)
+    <span class="kw">return</span> {hash, nonce};
+}
+<span class="cm">// Average: ~90 SECONDS</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>GPU APPROACH (BATCH PARALLEL)</h3>
+          <div class="code"><span class="cm">// mineKernel — 1 thread = 1 nonce</span>
+<span class="kw">__global__ void</span> <span class="fn">mineKernel</span>(
+  <span class="kw">const</span> uchar* header,
+  uint batchStart,
+  uint* resultNonce,
+  <span class="kw">int</span>* found,
+  <span class="kw">volatile int</span>* abortFlag)
+{
+  <span class="kw">if</span> (*found || *abortFlag) <span class="kw">return</span>;
+  uint nonce = batchStart
+    + blockIdx.x * blockDim.x + threadIdx.x;
+  <span class="cm">// compute sha256_device → check → atomicCAS</span>
+}</div>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <div class="card" style="flex:1;text-align:center;">
+            <div style="font-family:'Orbitron',monospace;font-size:22px;color:var(--green);text-shadow:0 0 20px var(--green);">90s</div>
+            <div style="font-size:11px;color:var(--dim);margin-top:4px;">CPU</div>
+          </div>
+          <div class="card" style="flex:1;text-align:center;">
+            <div style="font-family:'Orbitron',monospace;font-size:22px;color:var(--cyan);text-shadow:0 0 20px var(--cyan);">0.08s</div>
+            <div style="font-size:11px;color:var(--dim);margin-top:4px;">GPU</div>
+          </div>
+          <div class="card" style="flex:1;text-align:center;">
+            <div style="font-family:'Orbitron',monospace;font-size:22px;color:var(--orange);text-shadow:0 0 20px var(--orange);">1125×</div>
+            <div style="font-size:11px;color:var(--dim);margin-top:4px;">SPEEDUP</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 6: MERKLE ROOTS -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s6">
+    <div class="section-tag">BLOCKCHAIN FUNDAMENTALS — 05</div>
+    <h2>MERKLE ROOTS & <span class="glow-cyan">PARALLEL REDUCTION</span></h2>
+    <div class="grid-2" style="gap:24px;align-items:start;">
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>WHAT IS A MERKLE TREE?</h3>
+          <p>A binary hash tree that condenses all transaction data into a single <strong>Merkle Root</strong> stored in the block header. Tamper any transaction → root changes → block is invalid.</p>
+        </div>
+        <div class="merkle-tree" style="margin:12px 0;">
+          <div class="merkle-row">
+            <div class="merkle-node root">ROOT HASH</div>
+          </div>
+          <div style="display:flex;justify-content:center;gap:40px;font-size:18px;color:var(--dim);">/ \</div>
+          <div class="merkle-row">
+            <div class="merkle-node mid">H(T0‖T1)</div>
+            <div class="merkle-node mid">H(T2‖T3)</div>
+          </div>
+          <div style="display:flex;justify-content:center;gap:8px;font-size:14px;color:var(--dim);">/ \ &nbsp;&nbsp;&nbsp;&nbsp;/ \</div>
+          <div class="merkle-row">
+            <div class="merkle-node leaf">sha256(T0)</div>
+            <div class="merkle-node leaf">sha256(T1)</div>
+            <div class="merkle-node leaf">sha256(T2)</div>
+            <div class="merkle-node leaf">sha256(T3)</div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>CPU: O(N) SEQUENTIAL</h3>
+          <p>Hash pairs one-by-one in a while loop. Each level waits for the previous. For 4000 transactions: slow and blocking.</p>
+        </div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>GPU: O(log N) PARALLEL REDUCTION</h3>
+          <p>Each round, <strong>N/2 threads</strong> hash pairs simultaneously. The array halves each round until 1 hash remains — the root.</p>
+          <div class="code" style="margin-top:10px;"><span class="cm">// In-place parallel reduction</span>
+<span class="kw">__global__ void</span> <span class="fn">merkelKernel</span>(
+  uchar* hashes, <span class="kw">int</span> numHashes)
+{
+  <span class="kw">int</span> i = blockIdx.x*blockDim.x + threadIdx.x;
+  <span class="cm">// Thread i: hash[i*2] ‖ hash[i*2+1] → hash[i]</span>
+  uchar* left  = hashes + (i*<span class="num">2</span>)*<span class="num">32</span>;
+  uchar* right = hashes + (i*<span class="num">2</span>+<span class="num">1</span>)*<span class="num">32</span>;
+  uchar* out   = hashes + i*<span class="num">32</span>;
+}</div>
+        </div>
+        <div class="card">
+          <h3>CUDA DYNAMIC PARALLELISM (CDP)</h3>
+          <p>A <strong>parent kernel</strong> (<code>merkleParentKernel</code>) manages the reduction loop <em>entirely on the device</em>, spawning child <code>merkelKernel</code> grids for each level — eliminating CPU-to-GPU round-trip latency per level. Requires <code>-rdc=true</code>.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 7: VERIFICATION -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s7">
+    <div class="section-tag">BLOCKCHAIN FUNDAMENTALS — 06</div>
+    <h2>CHAIN <span class="glow-green">VERIFICATION</span></h2>
+    <div class="grid-2" style="gap:24px;">
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>CPU: O(N) SEQUENTIAL</h3>
+          <div class="code"><span class="cm">// One block at a time</span>
+<span class="kw">bool</span> <span class="fn">isChainValid</span>() {
+  <span class="kw">for</span> (<span class="kw">int</span> i = <span class="num">1</span>; i &lt; chain.size(); i++) {
+    <span class="cm">// recompute header hash</span>
+    string hdr = index + prevHash
+               + merkleRoot + nonce;
+    <span class="kw">if</span> (sha256(hdr) != block.hash)
+      <span class="kw">return false</span>;
+    <span class="kw">if</span> (block.prevHash != chain[i-1].hash)
+      <span class="kw">return false</span>;
+  }
+}</div>
+        </div>
+        <div class="card">
+          <h3>THREE CHECKS PER BLOCK</h3>
+          <ul>
+            <li><strong>Hash integrity</strong> — recomputed sha256 matches stored hash</li>
+            <li><strong>Difficulty</strong> — hash has 6 leading zeros</li>
+            <li><strong>Chain linkage</strong> — prevHash matches prior block's hash</li>
+          </ul>
+        </div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>GPU: 1 THREAD PER BLOCK</h3>
+          <div class="code"><span class="cm">// verifyChainKernel — all blocks at once</span>
+<span class="kw">__global__ void</span> <span class="fn">verifyChainKernel</span>(
+  <span class="kw">const</span> VerificationRecord* records,
+  <span class="kw">int</span> size, <span class="kw">int</span>* result)
+{
+  <span class="kw">int</span> idx = blockIdx.x*blockDim.x + threadIdx.x;
+  <span class="cm">// compute sha256_device(record.header)</span>
+  <span class="cm">// bytesToHex → stringsEqual comparison</span>
+  <span class="kw">if</span> (!valid) <span class="fn">atomicExch</span>(result, <span class="num">0</span>);
+}</div>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:14px;">
+          <div class="card" style="flex:1;text-align:center;">
+            <div style="font-family:'Orbitron',monospace;font-size:20px;color:var(--green);">0.025s</div>
+            <div style="font-size:11px;color:var(--dim);margin-top:4px;">CPU (1000 blocks)</div>
+          </div>
+          <div class="card" style="flex:1;text-align:center;">
+            <div style="font-family:'Orbitron',monospace;font-size:20px;color:var(--cyan);">0.0007s</div>
+            <div style="font-size:11px;color:var(--dim);margin-top:4px;">GPU (1000 blocks)</div>
+          </div>
+          <div class="card" style="flex:1;text-align:center;">
+            <div style="font-family:'Orbitron',monospace;font-size:20px;color:var(--orange);">35.7×</div>
+            <div style="font-size:11px;color:var(--dim);margin-top:4px;">SPEEDUP</div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>BRIDGE PATTERN</h3>
+          <p><code>verificationLink.cpp</code> flattens C++ <code>Block</code> objects into flat <code>VerificationRecord</code> structs for a single coalesced <code>cudaMemcpy</code> to the device — decoupling <code>g++</code> and <code>nvcc</code> compilation domains.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 8: PROJECT OVERVIEW -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s8">
+    <div class="section-tag">PROJECT DEEP-DIVE — 01</div>
+    <h2>PROJECT <span class="glow-cyan">OVERVIEW</span></h2>
+    <div class="grid-2" style="gap:24px;">
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>MISSION STATEMENT</h3>
+          <p>Profile a representative sequential blockchain node based on <strong>tko22/simple-blockchain</strong> (C++) and replace its core sequential validation and mining loops with a custom <strong>CUDA acceleration layer</strong> — demonstrating that hardware-accelerated execution can reduce block processing latency from minutes to milliseconds without altering consensus protocol.</p>
+        </div>
+        <div class="card">
+          <h3>HARDWARE ENVIRONMENT</h3>
+          <div class="spec-row"><span class="spec-key">CPU</span><span class="spec-val">Intel Xeon W-2275 @ 3.30GHz (14C/28T)</span></div>
+          <div class="spec-row"><span class="spec-key">GPU</span><span class="spec-val">NVIDIA RTX A2000 12GB</span></div>
+          <div class="spec-row"><span class="spec-key">CUDA CORES</span><span class="spec-val">3,328</span></div>
+          <div class="spec-row"><span class="spec-key">CUDA TOOLKIT</span><span class="spec-val">v11.5</span></div>
+          <div class="spec-row"><span class="spec-key">OS</span><span class="spec-val">Ubuntu Linux</span></div>
+          <div class="spec-row"><span class="spec-key">COMPILER</span><span class="spec-val">nvcc + g++ (hybrid pipeline)</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>ARCHITECTURE MIRRORS</h3>
+          <p>This architecture mirrors the <strong>parallel execution engines</strong> of next-generation networks:</p>
+          <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
+            <span class="badge">Solana</span>
+            <span class="badge badge-purple">Monad</span>
+            <span class="badge badge-orange">EVM Parallel</span>
+          </div>
+        </div>
+        <div class="card">
+          <h3>REAL-WORLD APPLICATIONS</h3>
+          <ul>
+            <li>High-throughput <strong>DeFi transaction validation</strong></li>
+            <li><strong>Digital forensics</strong> — rapid chain verification</li>
+            <li><strong>Mining pool</strong> acceleration</li>
+            <li>Network consensus under <strong>high TPS load</strong></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 9: PERFORMANCE BENCHMARKS -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s9">
+    <div class="section-tag">PROJECT DEEP-DIVE — 02</div>
+    <h2>FINAL <span class="glow-green">BENCHMARKS</span></h2>
+    <div style="width:100%;margin-bottom:24px;">
+      <table>
+        <thead>
+          <tr>
+            <th>FUNCTION</th>
+            <th>CPU BASELINE</th>
+            <th>GPU ACCELERATED</th>
+            <th>SPEEDUP</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="tag orange">PoW</span> Proof-of-Work Mining</td>
+            <td style="color:var(--orange);">90.00000 s</td>
+            <td style="color:var(--green);">0.08000 s</td>
+            <td><span class="badge">1,125×</span></td>
+          </tr>
+          <tr>
+            <td><span class="tag">MERKLE</span> Root Generation</td>
+            <td style="color:var(--orange);">0.02336 s</td>
+            <td style="color:var(--green);">0.00085 s</td>
+            <td><span class="badge">27.5×</span></td>
+          </tr>
+          <tr>
+            <td><span class="tag purple">VERIFY</span> Chain Verification</td>
+            <td style="color:var(--orange);">0.02500 s</td>
+            <td style="color:var(--green);">0.00070 s</td>
+            <td><span class="badge">35.7×</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="grid-3" style="gap:16px;">
+      <div class="card" style="text-align:center;">
+        <div style="font-family:'Orbitron',monospace;font-size:36px;color:var(--cyan);text-shadow:0 0 30px var(--cyan);">1,125×</div>
+        <div style="font-size:12px;color:var(--dim);margin-top:8px;letter-spacing:2px;">MINING SPEEDUP</div>
+        <div class="divider"></div>
+        <div style="font-size:13px;">90s → 80ms</div>
+      </div>
+      <div class="card" style="text-align:center;">
+        <div style="font-family:'Orbitron',monospace;font-size:36px;color:var(--green);text-shadow:0 0 30px var(--green);">27.5×</div>
+        <div style="font-size:12px;color:var(--dim);margin-top:8px;letter-spacing:2px;">MERKLE SPEEDUP</div>
+        <div class="divider"></div>
+        <div style="font-size:13px;">23ms → 0.85ms</div>
+      </div>
+      <div class="card" style="text-align:center;">
+        <div style="font-family:'Orbitron',monospace;font-size:36px;color:var(--purple);text-shadow:0 0 30px var(--purple);">35.7×</div>
+        <div style="font-size:12px;color:var(--dim);margin-top:8px;letter-spacing:2px;">VERIFY SPEEDUP</div>
+        <div class="divider"></div>
+        <div style="font-size:13px;">25ms → 0.7ms</div>
+      </div>
+    </div>
+    <div style="margin-top:16px;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--dim);text-align:center;">
+      Tested: 1,000-block chain, 4,000 transactions/block · Auto-miner bash script · cudaEventRecord profiling
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 10: MINING ENGINE DEEP DIVE -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s10">
+    <div class="section-tag">PROJECT DEEP-DIVE — 03</div>
+    <h2>MINING ENGINE <span class="glow-orange">DEEP DIVE</span></h2>
+    <div class="grid-2" style="gap:24px;">
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>KEY OPTIMISATIONS</h3>
+          <ul>
+            <li><strong>__constant__ memory</strong> — block header broadcast to all warps at zero latency via L1 cache</li>
+            <li><strong>Grid-Stride Loop</strong> — covers unbounded nonce space across batches</li>
+            <li><strong>On-device integer-to-ASCII</strong> — eliminates PCIe transfer for nonce string conversion</li>
+            <li><strong>__launch_bounds__(256)</strong> — informs compiler for optimal register allocation per SM</li>
+            <li><strong>atomicCAS</strong> — lock-free, race-free result write from first winning thread</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>BATCH LOOP PATTERN</h3>
+          <div class="code">uint batchStart = <span class="num">0</span>;
+<span class="kw">while</span> (!h_found) {
+  <span class="fn">mineKernel</span>&lt;&lt;&lt;<span class="num">4096</span>, <span class="num">256</span>&gt;&gt;&gt;(
+    d_header, batchStart,
+    d_nonce, d_found, abortFlag);
+  <span class="fn">cudaDeviceSynchronize</span>();
+  batchStart += <span class="num">4096</span> * <span class="num">256</span>; <span class="cm">// ~1M/batch</span>
+}</div>
+        </div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>ZERO-COPY INTERRUPT SYSTEM</h3>
+          <p>When another node wins the block, the HTTP server thread sets <code>networkInterrupt = true</code>. A <code>volatile int*</code> mapped via <code>cudaHostAllocMapped</code> carries this signal directly across the PCIe bus — the GPU reads from physical RAM, bypassing L1/L2 cache. The kernel checks every 64 iterations and commits <strong>"kernel suicide"</strong> in sub-milliseconds.</p>
+        </div>
+        <div class="card">
+          <h3>CUDA STREAMS — ASYNC MINING</h3>
+          <p>The mining kernel launches on a dedicated <code>cudaStream_t</code>, completely <strong>decoupling the GPU from the CPU</strong>. The CPU host thread remains free to receive HTTP <code>POST /newchain</code> requests from the network while mining runs in the background — enabling real-time network consensus without blocking.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 11: MERKLE + VERIFICATION DEEP DIVE -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s11">
+    <div class="section-tag">PROJECT DEEP-DIVE — 04</div>
+    <h2>MERKLE & VERIFICATION <span class="glow-purple">DEEP DIVE</span></h2>
+    <div class="grid-2" style="gap:24px;">
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>MERKLE — CDP ARCHITECTURE</h3>
+          <p><code>merkleParentKernel</code> runs <em>entirely on device</em>. It loops over tree levels, spawning child <code>merkelKernel</code> grids via <strong>CUDA Dynamic Parallelism</strong>. Requires <code>-rdc=true</code> (Relocatable Device Code) in NVCCFLAGS.</p>
+          <div class="code" style="margin-top:10px;"><span class="cm">// Parent kernel — device-side loop</span>
+<span class="kw">__global__ void</span> <span class="fn">merkleParentKernel</span>(
+  uchar* hashes, <span class="kw">int</span> count)
+{
+  <span class="kw">while</span> (count &gt; <span class="num">1</span>) {
+    <span class="kw">int</span> pairs = count / <span class="num">2</span>;
+    <span class="fn">merkelKernel</span>&lt;&lt;&lt;grid, block&gt;&gt;&gt;(
+      hashes, count); <span class="cm">// child spawn</span>
+    <span class="fn">cudaDeviceSynchronize</span>();
+    count = pairs;
+  }
+}</div>
+        </div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>VERIFICATION — KEY TECHNIQUES</h3>
+          <ul>
+            <li><strong>__restrict__ pointers</strong> — guarantees no aliasing, enables coalesced memory reads and instruction reordering</li>
+            <li><strong>uint32_t string comparison</strong> — 4 bytes compared per op instead of 1 (16 ops for 64-char hash vs 65)</li>
+            <li><strong>atomicExch(result, 0)</strong> — fail-fast: any invalid block immediately signals global failure</li>
+            <li><strong>atomicAdd(result, 0)</strong> — early-exit read without contention</li>
+            <li><strong>bytesToHex device function</strong> — lookup table converts 32 hash bytes to 64 hex chars on-device</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>VERIFICATION STREAMS</h3>
+          <p>Chain split into two halves processed on <strong>two concurrent cudaStreams</strong>. <code>cudaMemcpyAsync</code> of second half overlaps with kernel execution of first half — hiding PCIe transfer latency behind compute.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 12: BRIDGE ARCHITECTURE -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s12">
+    <div class="section-tag">PROJECT DEEP-DIVE — 05</div>
+    <h2>BRIDGE <span class="glow-cyan">ARCHITECTURE</span></h2>
+    <div style="width:100%;margin-bottom:20px;">
+      <div class="grid-3" style="gap:0;">
+        <div class="arch-box" style="border-right:none;">
+          <div class="arch-title">C++ HOST LAYER</div>
+          <div class="arch-sub">g++ compiled</div>
+          <div style="margin-top:10px;font-size:12px;color:var(--white);">
+            BlockChain objects<br>Block objects<br>std::vector&lt;string&gt;<br>json.hh / boost
+          </div>
+        </div>
+        <div class="arch-box" style="border-color:var(--cyan);background:rgba(0,245,255,0.06);">
+          <div class="arch-title" style="color:var(--cyan);">BRIDGE LAYER</div>
+          <div class="arch-sub">verificationLink.cpp</div>
+          <div style="margin-top:10px;font-size:12px;color:var(--white);">
+            Flatten C++ objects<br>Extract hash strings<br>Build VerificationRecord[]<br>Single cudaMemcpy
+          </div>
+        </div>
+        <div class="arch-box" style="border-left:none;border-color:var(--purple);background:rgba(191,95,255,0.04);">
+          <div class="arch-title" style="color:var(--purple);">CUDA DEVICE LAYER</div>
+          <div class="arch-sub">nvcc compiled</div>
+          <div style="margin-top:10px;font-size:12px;color:var(--white);">
+            mineKernel<br>merkelKernel<br>verifyChainKernel<br>sha256_device
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="grid-2" style="gap:24px;">
+      <div class="card">
+        <h3>WHY THE BRIDGE EXISTS</h3>
+        <p><code>nvcc</code> cannot compile STL <code>std::function</code>, <code>json.hh</code>, or Boost headers — they use C++ template metaprogramming features that are incompatible with device compilation. <strong>The rule:</strong> <code>.cu</code> files may only include CUDA headers and plain C structs. All blockchain logic stays in <code>.cpp</code> files compiled by <code>g++</code>.</p>
+      </div>
+      <div class="card">
+        <h3>VERIFICATION RECORD STRUCT</h3>
+        <div class="code"><span class="kw">struct</span> VerificationRecord {
+  <span class="kw">int</span>  index;
+  <span class="kw">char</span> previousHash[<span class="num">65</span>];
+  <span class="kw">char</span> hash[<span class="num">65</span>];
+  <span class="kw">char</span> header[<span class="num">256</span>];   <span class="cm">// raw header</span>
+  <span class="kw">int</span>  headerLen;
+  <span class="cm">// GPU recomputes expectedHash itself</span>
+};</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 13: FILE STRUCTURE -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s13">
+    <div class="section-tag">PROJECT DEEP-DIVE — 06</div>
+    <h2>FILE <span class="glow-green">STRUCTURE</span></h2>
+    <div class="grid-2" style="gap:24px;">
+      <div>
+        <h3 style="margin-bottom:12px;">CORE C++ FILES</h3>
+        <div class="code" style="line-height:1.9;"><span class="str">main.cpp</span>          <span class="cm">→ node init, CLI, HTTP server, atomic interrupt</span>
+<span class="str">Block.hpp</span>         <span class="cm">→ Block class, getters, toJSON()</span>
+<span class="str">BlockChain.hpp</span>    <span class="cm">→ addBlock(), replaceChain(), getLatestHash()</span>
+<span class="str">common.hpp</span>        <span class="cm">→ CPU getMerkleRoot(), CPU findHash() (baseline)</span>
+<span class="str">hash.hpp</span>          <span class="cm">→ OpenSSL SHA-256 wrapper sha256()</span>
+<span class="str">requests.hpp</span>      <span class="cm">→ P2P HTTP: addSelfToNetwork, sendNewChain</span></div>
+      </div>
+      <div>
+        <h3 style="margin-bottom:12px;">CUDA ACCELERATION FILES</h3>
+        <div class="code" style="line-height:1.9;"><span class="fn">gpu_mining.cu/.h</span>      <span class="cm">→ mineKernel, findHashGPU, abort system</span>
+<span class="fn">gpu_merkle.cu/.h</span>      <span class="cm">→ merkelKernel, CDP parent, getMerkleRootGPU</span>
+<span class="fn">gpu_sha256.cu/.h</span>      <span class="cm">→ sha256_device, K[] constant memory</span>
+<span class="fn">gpu_verification.cu</span>   <span class="cm">→ verifyChainKernel, bytesToHex, runVerifyKernel</span>
+<span class="fn">verificationLink.cpp</span>  <span class="cm">→ bridge: BlockChain → VerificationRecord[]</span>
+<span class="fn">cuda_error_check.h</span>    <span class="cm">→ CUDA_CHECK, CUDA_CHECK_KERNEL macros</span></div>
+        <div class="card" style="margin-top:14px;">
+          <h3>BUILD SYSTEM</h3>
+          <p>Hybrid Makefile: <strong>g++</strong> compiles <code>.cpp</code> with <code>-std=c++17</code>, <strong>nvcc</strong> compiles <code>.cu</code> with <code>-rdc=true --expt-relaxed-constexpr -O3</code>. Final link via nvcc with <code>-lcudart -lssl -lcrypto -lboost_system</code>.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 14: CUDA KEYWORDS & PRIMITIVES -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s14">
+    <div class="section-tag">CUDA ACCELERATION — 01</div>
+    <h2>CUDA KEYWORDS & <span class="glow-purple">PRIMITIVES</span></h2>
+    <div class="scroll-content">
+      <div class="grid-2" style="gap:18px;margin-bottom:18px;">
+        <div class="card">
+          <h3>MEMORY HIERARCHY</h3>
+          <div class="pill-grid">
+            <span class="pill">__constant__</span>
+            <span class="pill green">cudaHostAllocMapped</span>
+            <span class="pill orange">cudaMemcpyAsync</span>
+            <span class="pill">cudaMalloc</span>
+            <span class="pill green">cudaMemset</span>
+            <span class="pill orange">cudaFree</span>
+          </div>
+          <div class="divider"></div>
+          <p style="font-size:13px;"><strong>__constant__</strong> stores SHA-256 K[64] array and block header — broadcast from L1 cache to all threads in a warp at zero bandwidth cost. <strong>cudaHostAllocMapped</strong> creates Zero-Copy pinned RAM shared between CPU and GPU for the abort flag.</p>
+        </div>
+        <div class="card">
+          <h3>KERNEL QUALIFIERS</h3>
+          <div class="pill-grid">
+            <span class="pill">__global__</span>
+            <span class="pill green">__device__</span>
+            <span class="pill orange">__launch_bounds__(256)</span>
+            <span class="pill">__restrict__</span>
+            <span class="pill green">volatile</span>
+          </div>
+          <div class="divider"></div>
+          <p style="font-size:13px;"><strong>__launch_bounds__(256)</strong> tells the compiler exact thread count for optimal register allocation. <strong>__restrict__</strong> guarantees no pointer aliasing, enabling coalesced loads. <strong>volatile</strong> forces cache-bypass for abort flag reads.</p>
+        </div>
+      </div>
+      <div class="grid-2" style="gap:18px;">
+        <div class="card">
+          <h3>ATOMIC OPERATIONS</h3>
+          <div class="pill-grid">
+            <span class="pill">atomicCAS</span>
+            <span class="pill green">atomicExch</span>
+            <span class="pill orange">atomicAdd</span>
+          </div>
+          <div class="divider"></div>
+          <p style="font-size:13px;"><strong>atomicCAS(found, 0, 1)</strong> — only the first thread to find a valid nonce writes its result; all subsequent winners see found=1 and exit cleanly. <strong>atomicExch(result, 0)</strong> — fail-fast chain invalidation from any thread.</p>
+        </div>
+        <div class="card">
+          <h3>ASYNC & STREAMS</h3>
+          <div class="pill-grid">
+            <span class="pill">cudaStream_t</span>
+            <span class="pill green">cudaStreamCreate</span>
+            <span class="pill orange">cudaStreamSynchronize</span>
+            <span class="pill">cudaEventRecord</span>
+            <span class="pill green">cudaEventElapsedTime</span>
+          </div>
+          <div class="divider"></div>
+          <p style="font-size:13px;">Mining kernel on dedicated stream — CPU unblocked for HTTP. Chain verification split across 2 streams — <code>cudaMemcpyAsync</code> of second half overlaps with kernel on first. <code>cudaEvent</code> gives sub-millisecond GPU timing for all benchmarks.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 15: CUDA STREAMS VISUALISED -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s15">
+    <div class="section-tag">CUDA ACCELERATION — 02</div>
+    <h2>STREAMS & <span class="glow-cyan">ASYNC EXECUTION</span></h2>
+    <div class="grid-2" style="gap:24px;">
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>WITHOUT STREAMS (BLOCKING)</h3>
+          <div style="margin-top:10px;">
+            <div class="stream-row">
+              <div class="stream-label">CPU</div>
+              <div class="stream-bar transfer" style="width:30%;">LAUNCH</div>
+              <div class="stream-bar idle" style="width:40%;">WAIT…</div>
+              <div class="stream-bar transfer" style="width:30%;">HTTP</div>
+            </div>
+            <div class="stream-row">
+              <div class="stream-label">GPU</div>
+              <div class="stream-bar idle" style="width:10%;"></div>
+              <div class="stream-bar compute" style="width:60%;">MINE</div>
+              <div class="stream-bar idle" style="width:30%;"></div>
+            </div>
+          </div>
+          <p style="margin-top:10px;font-size:13px;">CPU is <strong>blocked</strong> waiting for GPU. Cannot receive network updates. If another node wins, the stale block corrupts the chain.</p>
+        </div>
+        <div class="card">
+          <h3>WITH STREAMS (ASYNC)</h3>
+          <div style="margin-top:10px;">
+            <div class="stream-row">
+              <div class="stream-label">CPU</div>
+              <div class="stream-bar transfer" style="width:15%;">LAUNCH</div>
+              <div class="stream-bar compute" style="width:55%;background:rgba(0,255,136,0.15);border-color:rgba(0,255,136,0.4);color:var(--green);">HTTP SERVER FREE</div>
+              <div class="stream-bar transfer" style="width:30%;">INTERRUPT</div>
+            </div>
+            <div class="stream-row">
+              <div class="stream-label">GPU</div>
+              <div class="stream-bar idle" style="width:5%;"></div>
+              <div class="stream-bar compute" style="width:50%;">MINE</div>
+              <div class="stream-bar idle" style="width:5%;"></div>
+              <div class="stream-bar transfer" style="width:15%;background:rgba(255,107,53,0.2);border-color:rgba(255,107,53,0.4);color:var(--orange);">ABORT</div>
+            </div>
+          </div>
+          <p style="margin-top:10px;font-size:13px;">CPU free to receive <code>POST /newchain</code>. GPU mines in background. Network interrupt arrives → volatile flag flips → kernel aborts in milliseconds.</p>
+        </div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>VERIFICATION — DUAL STREAMS</h3>
+          <div style="margin-top:10px;">
+            <div class="stream-row">
+              <div class="stream-label">Stream 1</div>
+              <div class="stream-bar transfer" style="width:25%;">MEMCPY½</div>
+              <div class="stream-bar compute" style="width:45%;">VERIFY ½ CHAIN</div>
+              <div class="stream-bar idle" style="width:30%;"></div>
+            </div>
+            <div class="stream-row">
+              <div class="stream-label">Stream 2</div>
+              <div class="stream-bar idle" style="width:15%;"></div>
+              <div class="stream-bar transfer" style="width:25%;">MEMCPY½</div>
+              <div class="stream-bar compute" style="width:45%;">VERIFY ½ CHAIN</div>
+            </div>
+          </div>
+          <p style="margin-top:10px;font-size:13px;">PCIe transfer of second half overlaps kernel execution of first half — maximising both bus and GPU utilisation simultaneously.</p>
+        </div>
+        <div class="card">
+          <h3>ZERO-COPY INTERRUPT</h3>
+          <div class="code"><span class="cm">// Pin RAM shared between CPU & GPU</span>
+<span class="kw">volatile int</span>* abortFlag;
+<span class="fn">cudaHostAllocMapped</span>(&abortFlag, ...);
+
+<span class="cm">// HTTP thread (CPU side):</span>
+*abortFlag = <span class="num">1</span>; <span class="cm">// instant PCIe signal</span>
+
+<span class="cm">// mineKernel (GPU side), every 64 iters:</span>
+<span class="kw">if</span> (*abortFlag) <span class="kw">return</span>; <span class="cm">// cache-bypass read</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 16: SHA-256 ON DEVICE -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s16">
+    <div class="section-tag">CUDA ACCELERATION — 03</div>
+    <h2>SHA-256 <span class="glow-green">ON DEVICE</span></h2>
+    <div class="grid-2" style="gap:24px;">
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>WHY REIMPLEMENT SHA-256?</h3>
+          <p>OpenSSL's <code>SHA256_Init/Update/Final</code> are CPU library calls — the GPU cannot invoke them. We implemented SHA-256 from scratch as a <code>__device__</code> function using only arithmetic operations that map directly to GPU ALU instructions.</p>
+        </div>
+        <div class="card">
+          <h3>CONSTANT MEMORY — K[64]</h3>
+          <div class="code"><span class="kw">__constant__</span> uint32_t K[<span class="num">64</span>] = {
+  <span class="num">0x428a2f98</span>, <span class="num">0x71374491</span>, ...
+};</div>
+          <p style="margin-top:10px;font-size:13px;">Stored in <strong>constant cache</strong> — broadcast to all 3,328 threads simultaneously. Eliminates 64 global memory reads per thread per hash. Critical for throughput at scale.</p>
+        </div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>REGISTER-LEVEL EXECUTION</h3>
+          <div class="code"><span class="kw">__device__ void</span> <span class="fn">sha256_device</span>(
+  <span class="kw">const</span> uchar* input, <span class="kw">int</span> len,
+  uchar* output)
+{
+  <span class="cm">// All state in registers — no shared mem</span>
+  uint32_t h0=<span class="num">0x6a09e667</span>, h1=<span class="num">0xbb67ae85</span>...
+  uchar msg[<span class="num">256</span>]; <span class="cm">// local buffer</span>
+  <span class="cm">// Pad → 64-byte chunks → 64 rounds</span>
+  <span class="cm">// ROTR/CH/MAJ/EP0/EP1/SIG0/SIG1 macros</span>
+  <span class="cm">// Big-endian 32-byte output</span>
+}</div>
+        </div>
+        <div class="card">
+          <h3>ZERO INTER-THREAD DEPENDENCY</h3>
+          <p>Each thread's SHA-256 runs entirely in <strong>its own register file</strong>. No shared memory, no synchronisation barriers, no data hazards. This is why 3,328 threads can each run independent SHA-256 computations simultaneously with maximum SM occupancy.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 17: TESTING & METHODOLOGY -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s17">
+    <div class="section-tag">PROJECT DEEP-DIVE — 07</div>
+    <h2>TESTING & <span class="glow-orange">METHODOLOGY</span></h2>
+    <div class="grid-2" style="gap:24px;">
+      <div>
+        <div class="card">
+          <h3>AUTO-MINER BASH SCRIPT</h3>
+          <p>Custom Bash script automatically queues <strong>1,000 blocks</strong> to the network, each containing <strong>4,000 duplicated message entries</strong> — simulating a high-volume transaction block for statistically stable benchmarks.</p>
+        </div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>CPU PROFILING</h3>
+          <div class="code"><span class="cm">// Sequential baseline timing</span>
+clock_t start = <span class="fn">clock</span>();
+<span class="fn">getMerkleRoot</span>(transactions);
+clock_t end = <span class="fn">clock</span>();
+<span class="kw">double</span> ms = (<span class="kw">double</span>)(end-start)
+           / CLOCKS_PER_SEC * <span class="num">1000</span>;</div>
+        </div>
+        <div class="card">
+          <h3>GPU PROFILING</h3>
+          <div class="code"><span class="cm">// High-precision CUDA event timing</span>
+cudaEvent_t start, stop;
+<span class="fn">cudaEventCreate</span>(&start);
+<span class="fn">cudaEventRecord</span>(start);
+
+<span class="fn">verifyChainKernel</span>&lt;&lt;&lt;grid, block&gt;&gt;&gt;(...);
+<span class="fn">cudaDeviceSynchronize</span>();
+
+<span class="fn">cudaEventRecord</span>(stop);
+<span class="fn">cudaEventElapsedTime</span>(&ms, start, stop);</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SLIDE 18: CONCLUSION -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="slide" id="s18">
+    <div class="section-tag">CONCLUSION</div>
+    <h2>RESULTS & <span class="glow-cyan">CONCLUSIONS</span></h2>
+    <div class="grid-2" style="gap:24px;margin-bottom:20px;">
+      <div>
+        <div class="card" style="margin-bottom:14px;">
+          <h3>WHAT WE PROVED</h3>
+          <ul>
+            <li>GPU acceleration reduces block discovery from <strong>90 seconds → 80 milliseconds</strong></li>
+            <li>Parallel reduction computes Merkle roots <strong>27.5× faster</strong> at scale</li>
+            <li>1000-block chain validates in <strong>0.7ms</strong> vs 25ms on CPU</li>
+            <li>Asynchronous streams enable <strong>real-time network consensus</strong> without blocking</li>
+            <li>Zero-copy mapped memory provides <strong>sub-millisecond kernel abort</strong></li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>TECHNIQUES BEYOND CURRICULUM</h3>
+          <div class="pill-grid">
+            <span class="pill">CUDA Dynamic Parallelism</span>
+            <span class="pill green">Zero-Copy Mapped Memory</span>
+            <span class="pill orange">cudaHostAllocMapped</span>
+            <span class="pill">Async Interrupt System</span>
+            <span class="pill green">__restrict__ aliasing</span>
+            <span class="pill orange">volatile PCIe reads</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:14px;text-align:center;">
+          <div style="font-family:'Orbitron',monospace;font-size:48px;color:var(--cyan);text-shadow:0 0 40px var(--cyan);line-height:1;">1125×</div>
+          <div style="color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:12px;margin-top:8px;letter-spacing:3px;">PEAK SPEEDUP ACHIEVED</div>
+          <div class="divider"></div>
+          <div style="font-size:14px;">Hardware parallelism is the definitive path<br>to scaling next-generation decentralised networks.</div>
+        </div>
+        <div class="card" style="text-align:center;">
+          <div style="font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:600;letter-spacing:2px;margin-bottom:8px;">RAYYAN HASSAN SALMAN · AHMAD IBRAHIM AHMED</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--dim);">GIKI — FACULTY OF CS&E</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--dim);margin-top:4px;">DR. TAJ MUHAMMAD KHAN</div>
+          <div style="margin-top:12px;">
+            <span class="badge">2023601</span>
+            <span class="badge badge-purple" style="margin-left:8px;">2023066</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /slides -->
+
+<!-- Navigation -->
+<div id="nav">
+  <button class="nav-btn" id="prevBtn" onclick="changeSlide(-1)">◀ PREV</button>
+  <span id="slide-counter">01 / 18</span>
+  <button class="nav-btn" id="nextBtn" onclick="changeSlide(1)">NEXT ▶</button>
+</div>
+
+<script>
+  // State
+  let current = 0;
+  const slides = document.querySelectorAll('.slide');
+  const total = slides.length;
+
+  function changeSlide(dir) {
+    slides[current].classList.remove('active');
+    current = (current + dir + total) % total;
+    slides[current].classList.add('active');
+    updateUI();
+  }
+
+  function goToSlide(n) {
+    slides[current].classList.remove('active');
+    current = n;
+    slides[current].classList.add('active');
+    updateUI();
+  }
+
+  function updateUI() {
+    document.getElementById('slide-counter').textContent =
+      String(current + 1).padStart(2, '0') + ' / ' + String(total).padStart(2, '0');
+    document.getElementById('progress').style.width =
+      ((current + 1) / total * 100) + '%';
+  }
+
+  // Keyboard navigation
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+      e.preventDefault();
+      changeSlide(1);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      changeSlide(-1);
+    }
+  });
+
+  // Touch swipe
+  let touchStartX = 0;
+  document.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; });
+  document.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    if (Math.abs(dx) > 50) changeSlide(dx < 0 ? 1 : -1);
+  });
+
+  // Custom cursor
+  const cursor = document.getElementById('cursor');
+  const trail = document.getElementById('cursorTrail');
+  document.addEventListener('mousemove', e => {
+    cursor.style.left = e.clientX + 'px';
+    cursor.style.top = e.clientY + 'px';
+    setTimeout(() => {
+      trail.style.left = e.clientX + 'px';
+      trail.style.top = e.clientY + 'px';
+    }, 80);
+  });
+
+  // Particles
+  const particlesContainer = document.getElementById('particles');
+  for (let i = 0; i < 25; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.style.left = Math.random() * 100 + '%';
+    p.style.animationDuration = (8 + Math.random() * 12) + 's';
+    p.style.animationDelay = (Math.random() * 10) + 's';
+    p.style.width = p.style.height = (Math.random() > 0.7 ? '3px' : '2px');
+    if (Math.random() > 0.7) p.style.background = 'var(--green)';
+    if (Math.random() > 0.9) p.style.background = 'var(--purple)';
+    particlesContainer.appendChild(p);
+  }
+
+  // Init
+  updateUI();
+</script>
+</body>
+</html>
