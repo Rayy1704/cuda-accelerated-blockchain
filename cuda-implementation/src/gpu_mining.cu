@@ -14,7 +14,7 @@
     __constant__ unsigned char d_header[256];
 
     __device__ bool hasLeadingZeros(unsigned char* hash) {
-        int fullBytes = 4; //for first 6 characters
+        int fullBytes = 3; //for first 6 characters
         for (int i = 0; i < fullBytes; i++) {
             if (hash[i] != 0x00) return false;
         }
